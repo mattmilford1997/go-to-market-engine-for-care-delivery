@@ -269,7 +269,7 @@ export default function CostsPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
-                        <Tooltip formatter={(v: number) => fmtFull(v)} />
+                        <Tooltip formatter={(v: number | undefined) => v != null ? fmtFull(v) : ""} />
                         <Legend iconSize={8} wrapperStyle={{ fontSize: "11px" }} />
                         <Area type="monotone" dataKey="ad_spend" name="Ad Spend" stroke="#6366f1" fill="url(#adGrad)" strokeWidth={2} />
                         <Area type="monotone" dataKey="channel_spend" name="Channel Fees" stroke="#10b981" fill="url(#chGrad)" strokeWidth={2} />
@@ -352,7 +352,7 @@ export default function CostsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={histView === "weekly" ? -35 : 0} textAnchor={histView === "weekly" ? "end" : "middle"} height={histView === "weekly" ? 50 : 30} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
-                      <Tooltip formatter={(v: number) => fmtFull(v)} />
+                      <Tooltip formatter={(v: number | undefined) => v != null ? fmtFull(v) : ""} />
                       <Legend iconSize={8} wrapperStyle={{ fontSize: "11px" }} />
                       <Bar dataKey="ad_spend"      name="Ad Spend"      fill="#6366f1" stackId="a" radius={[0, 0, 0, 0]} />
                       <Bar dataKey="channel_spend" name="Channel Fees"  fill="#10b981" stackId="a" />
