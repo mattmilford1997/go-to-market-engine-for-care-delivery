@@ -1,0 +1,435 @@
+"use client";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { contentApi, approvalApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
+import {
+  FileText, Instagram, Linkedin, Facebook, Calendar,
+  RefreshCw, Zap, CheckCircle, Clock, Eye, EyeOff,
+  BookOpen, TrendingUp,
+} from "lucide-react";
+
+// ─── Types ──────────────────────────────────────────────────────
+interface ContentItem {
+  id: string;
+  title: string;
+  body: string;
+  content_type: string;
+  status: string;
+  target_keyword?: string;
+  created_at: string;
+}
+interface CalendarEntry {
+  week: number;
+  items: Array<{ type: string; topic: string }>;
+}
+
+// ─── Constants ──────────────────────────────────────────────────
+const TYPE_META: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
+  blog_post: { label: "Blog Post", color: "text-blue-700", bg: "bg-blue-50", icon: <BookOpen className="w-3.5 h-3.5" /> },
+  social_facebook: { label: "Facebook", color: "text-blue-600", bg: "bg-blue-50", icon: <Facebook className="w-3.5 h-3.5" /> },
+  social_instagram: { label: "Instagram", color: "text-pink-600", bg: "bg-pink-50", icon: <Instagram className="w-3.5 h-3.5" /> },
+  social_linkedin: { label: "LinkedIn", color: "text-sky-700", bg: "bg-sky-50", icon: <Linkedin className="w-3.5 h-3.5" /> },
+  email_sequence: { label: "Email", color: "text-violet-700", bg: "bg-violet-50", icon: <FileText className="w-3.5 h-3.5" /> },
+  ad_copy_google: { label: "Google Ad", color: "text-orange-700", bg: "bg-orange-50", icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  ad_copy_meta: { label: "Meta Ad", color: "text-indigo-700", bg: "bg-indigo-50", icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  fax_sheet: { label: "Fax Sheet", color: "text-cyan-700", bg: "bg-cyan-50", icon: <FileText className="w-3.5 h-3.5" /> },
+  voicemail_script: { label: "Voicemail", color: "text-emerald-700", bg: "bg-emerald-50", icon: <FileText className="w-3.5 h-3.5" /> },
+  postcard: { label: "Postcard", color: "text-amber-700", bg: "bg-amber-50", icon: <FileText className="w-3.5 h-3.5" /> },
+  directory_bio: { label: "Directory Bio", color: "text-rose-700", bg: "bg-rose-50", icon: <FileText className="w-3.5 h-3.5" /> },
+};
+
+const STATUS_MAP: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-600",
+  pending_review: "bg-amber-50 text-amber-700",
+  approved: "bg-emerald-50 text-emerald-700",
+  rejected: "bg-rose-50 text-rose-700",
+  published: "bg-blue-50 text-blue-700",
+  scheduled: "bg-violet-50 text-violet-700",
+};
+
+const CHART_COLORS = ["#3b82f6", "#3b82f6", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#10b981"];
+
+function TypeBadge({ type }: { type: string }) {
+  const meta = TYPE_META[type] || { label: type, color: "text-slate-600", bg: "bg-slate-100", icon: null };
+  return (
+    <span className={cn("badge gap-1", meta.bg, meta.color)}>
+      {meta.icon}
+      {meta.label}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span className={cn("badge capitalize", STATUS_MAP[status] || "bg-slate-100 text-slate-600")}>
+      {status.replace("_", " ")}
+    </span>
+  );
+}
+
+function StatCard({ icon, label, value, sub, accent }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; accent: string }) {
+  return (
+    <div className="card card-hover p-5 flex items-start gap-4">
+      <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center shrink-0", accent)}>{icon}</div>
+      <div>
+        <div className="stat-number">{value}</div>
+        <div className="text-sm font-medium text-slate-700 mt-0.5">{label}</div>
+        {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Calendar Grid ───────────────────────────────────────────────
+const CALENDAR_TYPE_COLORS: Record<string, string> = {
+  blog_post: "#3b82f6",
+  social_facebook: "#3b82f6",
+  social_instagram: "#ec4899",
+  social_linkedin: "#0ea5e9",
+  email: "#8b5cf6",
+};
+
+function CalendarCell({ week, items }: { week: number; items: Array<{ type: string; topic: string }> }) {
+  return (
+    <div className="rounded-lg border border-slate-100 p-2 min-h-20 hover:border-violet-200 transition-colors">
+      <p className="text-xs font-semibold text-slate-400 mb-1.5">Wk {week}</p>
+      <div className="space-y-0.5">
+        {items.slice(0, 3).map((item, i) => {
+          const color = CALENDAR_TYPE_COLORS[item.type] || "#94a3b8";
+          return (
+            <div key={i} className="flex items-center gap-1 group">
+              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+              <p className="text-xs text-slate-600 truncate leading-tight">{item.topic}</p>
+            </div>
+          );
+        })}
+        {items.length > 3 && (
+          <p className="text-xs text-slate-400">+{items.length - 3} more</p>
+        )}
+        {items.length === 0 && (
+          <p className="text-xs text-slate-300 italic">Empty</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────────
+export default function ContentPage() {
+  const { companyId } = useParams<{ companyId: string }>();
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [calendar, setCalendar] = useState<CalendarEntry[]>([]);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!companyId) return;
+    Promise.all([
+      contentApi.items(companyId).catch(() => ({ data: { items: [] } })),
+      contentApi.calendar(companyId).catch(() => ({ data: { weeks: [] } })),
+    ]).then(([i, c]) => {
+      setItems(i.data.items || i.data || []);
+      setCalendar(c.data.weeks || []);
+    }).finally(() => setLoading(false));
+  }, [companyId]);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleGenerate = async (type: string) => {
+    setGenerating(type);
+    try {
+      if (type === "calendar") {
+        await contentApi.generateFullCalendar(companyId);
+        showToast("12-week content calendar generation started — check Approval Queue shortly.");
+        const c = await contentApi.calendar(companyId).catch(() => ({ data: { weeks: [] } }));
+        setCalendar(c.data.weeks || []);
+      } else if (type === "blog") {
+        await contentApi.generateBlogPost(companyId, "mental health treatment options", 1500);
+        showToast("Blog post queued for generation.");
+      } else if (type === "social") {
+        await contentApi.generateSocialPosts(companyId, "all", 3);
+        showToast("Social posts queued for generation.");
+      }
+      const i = await contentApi.items(companyId).catch(() => ({ data: { items: [] } }));
+      setItems(i.data.items || i.data || []);
+    } catch {
+      showToast("Generation failed — ensure ANTHROPIC_API_KEY is set.");
+    } finally {
+      setGenerating(null);
+    }
+  };
+
+  // Stats
+  const total = items.length;
+  const published = items.filter((i) => i.status === "published").length;
+  const pending = items.filter((i) => i.status === "pending_review").length;
+  const scheduled = items.filter((i) => i.status === "scheduled").length;
+  const approved = items.filter((i) => i.status === "approved").length;
+
+  // Type distribution chart
+  const typeCounts: Record<string, number> = {};
+  items.forEach((i) => {
+    typeCounts[i.content_type] = (typeCounts[i.content_type] || 0) + 1;
+  });
+  const chartData = Object.entries(typeCounts).map(([type, count]) => ({
+    name: TYPE_META[type]?.label || type,
+    value: count,
+  }));
+
+  // Filtered items
+  const FILTERS = ["all", "blog_post", "social_facebook", "social_instagram", "social_linkedin", "pending_review", "approved", "published"];
+  const filteredItems = items.filter((i) => {
+    if (activeFilter === "all") return true;
+    if (["blog_post", "social_facebook", "social_instagram", "social_linkedin"].includes(activeFilter)) return i.content_type === activeFilter;
+    return i.status === activeFilter;
+  });
+
+  // Build calendar weeks (fill 12 if from API or show empty)
+  const calendarWeeks = calendar.length > 0 ? calendar : Array.from({ length: 12 }, (_, i) => ({ week: i + 1, items: [] }));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-96">
+        <div className="text-center">
+          <RefreshCw className="w-8 h-8 text-violet-400 animate-spin mx-auto mb-3" />
+          <p className="text-slate-500 text-sm">Loading Content Studio…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-full">
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 fade-in bg-slate-900 text-white text-sm px-4 py-3 rounded-xl shadow-lg max-w-sm">
+          {toast}
+        </div>
+      )}
+
+      {/* Hero Header */}
+      <div className="gradient-content px-8 py-7 text-white">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <FileText className="w-5 h-5 opacity-80" />
+              <span className="text-sm font-medium opacity-80 uppercase tracking-wide">Module 3</span>
+            </div>
+            <h1 className="text-2xl font-bold">Content Studio</h1>
+            <p className="text-violet-100 text-sm mt-1">Blog posts · Social media · 12-week editorial calendar</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleGenerate("blog")}
+              disabled={!!generating}
+              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+            >
+              {generating === "blog" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+              New Blog Post
+            </button>
+            <button
+              onClick={() => handleGenerate("social")}
+              disabled={!!generating}
+              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+            >
+              {generating === "social" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Instagram className="w-4 h-4" />}
+              Social Posts
+            </button>
+            <button
+              onClick={() => handleGenerate("calendar")}
+              disabled={!!generating}
+              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+            >
+              {generating === "calendar" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+              Generate 12-Week Calendar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-8 space-y-8">
+        {/* Stats Row */}
+        <div className="grid grid-cols-4 gap-4">
+          <StatCard icon={<FileText className="w-5 h-5 text-violet-600" />} label="Total Content" value={total} sub="All types" accent="bg-violet-50" />
+          <StatCard icon={<CheckCircle className="w-5 h-5 text-emerald-600" />} label="Published" value={published} sub="Live on site" accent="bg-emerald-50" />
+          <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} label="Pending Review" value={pending} sub="Awaiting approval" accent="bg-amber-50" />
+          <StatCard icon={<Calendar className="w-5 h-5 text-blue-600" />} label="Scheduled" value={scheduled} sub="Queued to publish" accent="bg-blue-50" />
+        </div>
+
+        {/* Two-column: Calendar + Distribution */}
+        <div className="grid grid-cols-3 gap-6">
+          {/* Content Calendar */}
+          <div className="card p-6 col-span-2">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">12-Week Content Calendar</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Editorial plan across all content types</p>
+              </div>
+              <button
+                onClick={() => handleGenerate("calendar")}
+                disabled={!!generating}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-lg text-xs font-medium disabled:opacity-50"
+                style={{ background: "#8b5cf6" }}
+              >
+                <Zap className="w-3 h-3" />
+                {calendar.length > 0 ? "Regenerate" : "Generate Calendar"}
+              </button>
+            </div>
+            {/* Legend */}
+            <div className="flex gap-3 mb-4">
+              {Object.entries(CALENDAR_TYPE_COLORS).slice(0, 4).map(([type, color]) => (
+                <div key={type} className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+                  <span className="text-xs text-slate-500">{TYPE_META[type]?.label || type}</span>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-6 gap-2">
+              {calendarWeeks.slice(0, 12).map((week: any) => (
+                <CalendarCell key={week.week} week={week.week} items={week.items || []} />
+              ))}
+            </div>
+          </div>
+
+          {/* Distribution */}
+          <div className="card p-6">
+            <h2 className="text-base font-semibold text-slate-900 mb-4">Content Mix</h2>
+            {chartData.length > 0 ? (
+              <>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
+                        {chartData.map((_, i) => (
+                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2 mt-2">
+                  {chartData.map((d, i) => (
+                    <div key={d.name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                        <span className="text-xs text-slate-600">{d.name}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-900">{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-slate-400 text-sm">No content yet</p>
+                <p className="text-slate-300 text-xs mt-1">Generate content to see distribution</p>
+              </div>
+            )}
+
+            {/* Status Pipeline */}
+            <div className="mt-6 pt-4 border-t border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Pipeline</h3>
+              <div className="flex items-center gap-1 text-xs">
+                {[
+                  { label: "Draft", count: items.filter((i) => i.status === "draft").length, color: "bg-slate-300" },
+                  { label: "Review", count: pending, color: "bg-amber-400" },
+                  { label: "Approved", count: approved, color: "bg-emerald-400" },
+                  { label: "Published", count: published, color: "bg-blue-500" },
+                ].map((s) => (
+                  <div key={s.label} className="flex flex-col items-center gap-1 flex-1">
+                    <div className="text-slate-700 font-bold">{s.count}</div>
+                    <div className={cn("w-full h-1.5 rounded-full", s.color)} />
+                    <div className="text-slate-500 text-center leading-tight">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Library */}
+        <div className="card p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Content Library</h2>
+              <p className="text-sm text-slate-500 mt-0.5">{filteredItems.length} items</p>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-1 flex-wrap mb-4">
+            {[
+              { key: "all", label: "All" },
+              { key: "blog_post", label: "Blog" },
+              { key: "social_facebook", label: "Facebook" },
+              { key: "social_instagram", label: "Instagram" },
+              { key: "social_linkedin", label: "LinkedIn" },
+              { key: "pending_review", label: "Pending" },
+              { key: "approved", label: "Approved" },
+              { key: "published", label: "Published" },
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setActiveFilter(f.key)}
+                className={cn(
+                  "px-3 py-1 rounded-lg text-xs font-medium transition-all",
+                  activeFilter === f.key
+                    ? "bg-violet-600 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {filteredItems.length === 0 ? (
+            <div className="text-center py-12">
+              <FileText className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+              <p className="text-slate-500 text-sm font-medium">No content yet</p>
+              <p className="text-slate-400 text-xs mt-1">Click "New Blog Post", "Social Posts", or "Generate 12-Week Calendar" to get started</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredItems.map((item) => (
+                <div key={item.id} className="border border-slate-100 rounded-xl overflow-hidden hover:border-violet-200 transition-colors">
+                  <div
+                    className="flex items-center gap-3 p-4 cursor-pointer"
+                    onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                  >
+                    <TypeBadge type={item.content_type} />
+                    <p className="flex-1 text-sm font-medium text-slate-900 truncate">{item.title || "(Untitled)"}</p>
+                    {item.target_keyword && (
+                      <span className="text-xs text-slate-400 hidden md:block">🔑 {item.target_keyword}</span>
+                    )}
+                    <StatusBadge status={item.status} />
+                    <button className="text-slate-400 hover:text-slate-600 shrink-0">
+                      {expandedId === item.id ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {expandedId === item.id && (
+                    <div className="px-4 pb-4 border-t border-slate-50">
+                      <p className="text-sm text-slate-600 leading-relaxed mt-3 whitespace-pre-wrap line-clamp-10">
+                        {item.body || "No content generated yet."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -211,32 +211,55 @@ async def _generate_profile_content_bg(
 async def _auto_create_profile_bg(company_id: str, platform: str, db: Session):
     """
     Playwright browser automation for auto-creating directory profiles.
-    Currently marks as needing manual completion if Playwright not fully configured.
+    Uses platform-specific automators for each of the 9 supported directories.
     """
+    profile = db.query(DirectoryProfile).filter(
+        DirectoryProfile.company_id == company_id,
+        DirectoryProfile.platform == platform,
+    ).first()
+
+    if not profile:
+        return
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        return
+
+    company_data = _company_data(company)
+    profile_data = _profile_to_dict(profile)
+    credentials = company.credentials or {}
+
     try:
-        from playwright.async_api import async_playwright
-        profile = db.query(DirectoryProfile).filter(
-            DirectoryProfile.company_id == company_id,
-            DirectoryProfile.platform == platform,
-        ).first()
+        from app.services.playwright_automation import get_automator
 
-        if not profile:
-            return
+        automator = get_automator(platform, company_data, profile_data, credentials)
 
-        # Platform-specific auto-create logic
-        # For now, mark as needs_manual with pre-filled content
-        # Full Playwright automation per platform is implemented in the workers module
-        profile.auto_create_status = "needs_manual"
+        async with automator as bot:
+            result = await bot.run()
+
+        # Update profile with automation result
+        profile.auto_create_status = result.status
+        if result.profile_url:
+            profile.profile_url = result.profile_url
+        if result.status == "completed":
+            profile.is_created = True
         db.commit()
 
-    except ImportError:  # pragma: no cover
-        profile = db.query(DirectoryProfile).filter(  # pragma: no cover
-            DirectoryProfile.company_id == company_id,  # pragma: no cover
-            DirectoryProfile.platform == platform,  # pragma: no cover
-        ).first()  # pragma: no cover
-        if profile:  # pragma: no cover
-            profile.auto_create_status = "needs_manual"  # pragma: no cover
-            db.commit()  # pragma: no cover
+    except ImportError:
+        # Playwright not installed — mark for manual completion
+        profile.auto_create_status = "needs_manual"
+        db.commit()
+    except ValueError as exc:
+        # No automator for this platform
+        import logging
+        logging.getLogger(__name__).warning("No automator for platform %s: %s", platform, exc)
+        profile.auto_create_status = "needs_manual"
+        db.commit()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("Auto-create failed for %s / %s: %s", platform, company_id, exc)
+        profile.auto_create_status = "failed"
+        db.commit()
 
 
 def _compute_optimization_score(content: dict) -> int:
