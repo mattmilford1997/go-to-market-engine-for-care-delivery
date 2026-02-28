@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import Column, String, Text, Boolean, JSON, Integer, Enum as SAEnum, ForeignKey, Date
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Uuid
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 from app.models.base import TimestampMixin, UUIDMixin
@@ -33,7 +33,7 @@ class ContentStatus(str, enum.Enum):
 class ContentItem(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "content_items"
 
-    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Uuid(as_uuid=False), ForeignKey("companies.id"), nullable=False)
     content_type = Column(SAEnum(ContentType), nullable=False)
     status = Column(SAEnum(ContentStatus), default=ContentStatus.pending_review)
 
@@ -65,8 +65,8 @@ class ContentItem(Base, UUIDMixin, TimestampMixin):
 class ApprovalItem(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "approval_items"
 
-    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
-    content_item_id = Column(UUID(as_uuid=True), ForeignKey("content_items.id"), nullable=True)
+    company_id = Column(Uuid(as_uuid=False), ForeignKey("companies.id"), nullable=False)
+    content_item_id = Column(Uuid(as_uuid=False), ForeignKey("content_items.id"), nullable=True)
     item_type = Column(String(100))  # ad_creative, blog_post, social_post, email, fax, voicemail, postcard, directory_profile
     title = Column(String(500))
     preview_data = Column(JSON, default={})

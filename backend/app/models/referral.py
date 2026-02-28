@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import Column, String, Text, Boolean, JSON, Float, Integer, Enum as SAEnum, ForeignKey, Date
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Uuid
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 from app.models.base import TimestampMixin, UUIDMixin
@@ -26,7 +26,7 @@ class TouchpointChannel(str, enum.Enum):
 class ReferralLead(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "referral_leads"
 
-    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Uuid(as_uuid=False), ForeignKey("companies.id"), nullable=False)
 
     # Provider identity
     npi = Column(String(20), unique=False)
@@ -64,8 +64,8 @@ class ReferralLead(Base, UUIDMixin, TimestampMixin):
 class Touchpoint(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "touchpoints"
 
-    lead_id = Column(UUID(as_uuid=True), ForeignKey("referral_leads.id"), nullable=False)
-    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    lead_id = Column(Uuid(as_uuid=False), ForeignKey("referral_leads.id"), nullable=False)
+    company_id = Column(Uuid(as_uuid=False), ForeignKey("companies.id"), nullable=False)
 
     channel = Column(SAEnum(TouchpointChannel), nullable=False)
     direction = Column(String(10), default="outbound")  # outbound / inbound
@@ -81,7 +81,7 @@ class Touchpoint(Base, UUIDMixin, TimestampMixin):
 class Campaign(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "campaigns"
 
-    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Uuid(as_uuid=False), ForeignKey("companies.id"), nullable=False)
     name = Column(String(300), nullable=False)
     module = Column(String(50))  # paid_ads, referral, content, seo, profiles
     channel = Column(String(50))  # google, meta, email, fax, voicemail, mail, blog, etc.
@@ -104,8 +104,8 @@ class Campaign(Base, UUIDMixin, TimestampMixin):
 class CampaignEnrollment(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "campaign_enrollments"
 
-    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id"), nullable=False)
-    lead_id = Column(UUID(as_uuid=True), ForeignKey("referral_leads.id"), nullable=False)
+    campaign_id = Column(Uuid(as_uuid=False), ForeignKey("campaigns.id"), nullable=False)
+    lead_id = Column(Uuid(as_uuid=False), ForeignKey("referral_leads.id"), nullable=False)
     current_step = Column(Integer, default=0)
     next_action_date = Column(Date)
     status = Column(String(50), default="active")

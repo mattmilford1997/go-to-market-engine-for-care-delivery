@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import Column, String, Text, Boolean, JSON, Float, Integer, Enum as SAEnum, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Uuid
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 from app.models.base import TimestampMixin, UUIDMixin
@@ -9,7 +9,7 @@ from app.models.base import TimestampMixin, UUIDMixin
 class SEOReport(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "seo_reports"
 
-    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Uuid(as_uuid=False), ForeignKey("companies.id"), nullable=False)
     report_type = Column(String(50))  # technical_audit, keyword_gap, competitor, local
 
     # Technical audit results
@@ -51,7 +51,7 @@ class SEOReport(Base, UUIDMixin, TimestampMixin):
 class DirectoryProfile(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "directory_profiles"
 
-    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Uuid(as_uuid=False), ForeignKey("companies.id"), nullable=False)
     platform = Column(String(100), nullable=False)
     # google_business_profile, psychology_today, therapyden, healthgrades, zocdoc, vitals, yelp, webmd, samhsa
 
