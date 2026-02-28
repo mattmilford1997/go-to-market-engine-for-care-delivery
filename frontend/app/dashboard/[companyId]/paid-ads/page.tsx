@@ -77,6 +77,30 @@ function SectionHeader({ title, subtitle, action }: { title: string; subtitle?: 
 
 const AUDIENCE_COLORS = ["#f97316", "#fb923c", "#fdba74"];
 
+// ─── Demo Data ───────────────────────────────────────────────────
+const DEMO_BUDGET_RECS: BudgetRec[] = [
+  { location: "Phoenix, AZ", google_recommended: 4200, meta_recommended: 2800 },
+  { location: "Scottsdale, AZ", google_recommended: 3100, meta_recommended: 1900 },
+  { location: "Tempe, AZ", google_recommended: 2600, meta_recommended: 1600 },
+  { location: "Mesa, AZ", google_recommended: 2900, meta_recommended: 1700 },
+  { location: "Chandler, AZ", google_recommended: 2400, meta_recommended: 1400 },
+];
+const DEMO_AUDIENCES: Audience[] = [
+  { id: "a1", name: "Depression & Anxiety Seekers", description: "Adults actively researching depression treatment and anxiety therapy", size_estimate: "2.1M–4.8M", targeting: { interests: ["Mental Health", "Anxiety", "Depression"], behaviors: ["Health Content Engaged"] } },
+  { id: "a2", name: "TMS Treatment Considerers", description: "Adults interested in non-medication depression treatments", size_estimate: "480K–1.2M", targeting: { interests: ["TMS Therapy", "Brain Health"], behaviors: ["Medical Research"] } },
+  { id: "a3", name: "Provider Referral Network", description: "PCPs and therapists within 25 miles of practice locations", size_estimate: "12K–45K", targeting: { interests: ["Healthcare Professionals"], behaviors: ["Business Decision Maker"] } },
+];
+const DEMO_QUEUE_ITEMS: ApprovalItem[] = [
+  { id: "q1", title: "Google Ad — TMS Therapy Phoenix", item_type: "google_keyword_cluster", status: "approved", preview_data: { keyword_cluster: "TMS therapy near me", headline_1: "TMS Therapy in Phoenix — No Medication Required" }, created_at: "2026-02-27T10:00:00Z" },
+  { id: "q2", title: "Google Ad — Depression Treatment", item_type: "google_ad_copy", status: "pending", preview_data: { keyword_cluster: "depression treatment specialist", headline_1: "Compassionate Depression Care — 90%+ Success Rate" }, created_at: "2026-02-27T10:01:00Z" },
+  { id: "q3", title: "Google Ad — Ketamine Clinic", item_type: "google_keyword_cluster", status: "pending", preview_data: { keyword_cluster: "ketamine treatment center AZ", headline_1: "Ketamine Infusion Therapy — Rapid Relief" }, created_at: "2026-02-27T10:02:00Z" },
+  { id: "q4", title: "Google Ad — Mental Health Clinic", item_type: "google_ad_copy", status: "approved", preview_data: { keyword_cluster: "mental health clinic Phoenix", headline_1: "Award-Winning Mental Health Clinic in Phoenix" }, created_at: "2026-02-27T10:03:00Z" },
+  { id: "q5", title: "Google Ad — Insurance Accepted", item_type: "google_ad_copy", status: "pending", preview_data: { keyword_cluster: "insurance accepted therapist", headline_1: "Most Insurance Accepted — Free Consultation" }, created_at: "2026-02-27T10:04:00Z" },
+  { id: "q6", title: "Meta Ad — Depression Seekers", item_type: "meta_ad_copy", status: "approved", preview_data: { primary_text: "Struggling with depression? TMS therapy has helped thousands find relief without medication. Covered by most insurance." }, created_at: "2026-02-27T10:05:00Z" },
+  { id: "q7", title: "Meta Ad — TMS Awareness", item_type: "meta_audience", status: "pending", preview_data: { primary_text: "There's a breakthrough treatment for depression that doesn't require medication. TMS therapy uses targeted magnetic pulses." }, created_at: "2026-02-27T10:06:00Z" },
+  { id: "q8", title: "Meta Ad — Provider Outreach", item_type: "meta_ad_copy", status: "approved", preview_data: { primary_text: "Partner with us to offer your patients TMS therapy. We handle all insurance verification and co-management support." }, created_at: "2026-02-27T10:07:00Z" },
+];
+
 // ─── Main Page ───────────────────────────────────────────────────
 export default function PaidAdsPage() {
   const { companyId } = useParams<{ companyId: string }>();
@@ -104,6 +128,14 @@ export default function PaidAdsPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const loadDemoData = () => {
+    setBudgetRecs(DEMO_BUDGET_RECS);
+    setAudiences(DEMO_AUDIENCES);
+    setQueueItems(DEMO_QUEUE_ITEMS);
+    setLoading(false);
+    showToast("Demo data loaded — all visualizations are now populated!");
   };
 
   const handleGenerate = async (type: "google" | "meta") => {
@@ -168,6 +200,13 @@ export default function PaidAdsPage() {
             <p className="text-orange-100 text-sm mt-1">Google Ads keyword clusters · Meta audience targeting · RSA copy</p>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={loadDemoData}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+            >
+              <Zap className="w-4 h-4" />
+              Load Demo
+            </button>
             <button
               onClick={() => handleGenerate("google")}
               disabled={!!generating}

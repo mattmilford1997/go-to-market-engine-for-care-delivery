@@ -92,6 +92,37 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Demo Data ───────────────────────────────────────────────────
+const DEMO_LEADS: Lead[] = [
+  { id: "l1", first_name: "Sarah", last_name: "Chen", credentials: "MD", specialty: "Family Medicine", fax: "(602) 555-0101", email: "schen@familycare.com", city: "Phoenix", state: "AZ", status: "referring", source: "nppes" },
+  { id: "l2", first_name: "James", last_name: "Rivera", credentials: "DO", specialty: "Internal Medicine", fax: "(602) 555-0102", email: "jrivera@im.com", city: "Scottsdale", state: "AZ", status: "engaged", source: "nppes" },
+  { id: "l3", first_name: "Emily", last_name: "Thompson", credentials: "MD", specialty: "Psychiatry", fax: "(602) 555-0103", email: "ethompson@psych.com", city: "Tempe", state: "AZ", status: "contacted", source: "nppes" },
+  { id: "l4", first_name: "Michael", last_name: "Park", credentials: "LCSW", specialty: "Therapy", fax: "(480) 555-0104", email: "mpark@therapy.com", city: "Mesa", state: "AZ", status: "new", source: "nppes" },
+  { id: "l5", first_name: "Jennifer", last_name: "Walsh", credentials: "NP", specialty: "Nurse Practitioner", fax: "(480) 555-0105", email: "jwalsh@np.com", city: "Chandler", state: "AZ", status: "new", source: "nppes" },
+  { id: "l6", first_name: "Robert", last_name: "Martinez", credentials: "MD", specialty: "Neurology", fax: "(602) 555-0106", email: "rmartinez@neuro.com", city: "Phoenix", state: "AZ", status: "referring", source: "nppes" },
+  { id: "l7", first_name: "Lisa", last_name: "Johnson", credentials: "PhD", specialty: "Clinical Psychology", fax: "(602) 555-0107", email: "ljohnson@cpsy.com", city: "Scottsdale", state: "AZ", status: "engaged", source: "nppes" },
+  { id: "l8", first_name: "David", last_name: "Kim", credentials: "MD", specialty: "Geriatric Psychiatry", fax: "(480) 555-0108", email: "dkim@gpsych.com", city: "Mesa", state: "AZ", status: "contacted", source: "nppes" },
+  { id: "l9", first_name: "Amanda", last_name: "Foster", credentials: "LMFT", specialty: "Marriage & Family Therapy", fax: "(480) 555-0109", email: "afoster@mft.com", city: "Gilbert", state: "AZ", status: "new", source: "nppes" },
+  { id: "l10", first_name: "Christopher", last_name: "Brown", credentials: "MD", specialty: "Addiction Medicine", fax: "(623) 555-0110", email: "cbrown@addmed.com", city: "Peoria", state: "AZ", status: "new", source: "nppes" },
+  { id: "l11", first_name: "Patricia", last_name: "Garcia", credentials: "PMHNP", specialty: "Psychiatric NP", fax: "(623) 555-0111", email: "pgarcia@pmhnp.com", city: "Glendale", state: "AZ", status: "inactive", source: "nppes" },
+  { id: "l12", first_name: "Thomas", last_name: "Wilson", credentials: "MD", specialty: "Family Medicine", fax: "(623) 555-0112", email: "twilson@fm.com", city: "Surprise", state: "AZ", status: "contacted", source: "nppes" },
+];
+const DEMO_CAMPAIGNS: Campaign[] = [
+  { id: "c1", name: "Phoenix PCPs — Q1 2026", channel: "fax", status: "active", impressions: 847, clicks: 0, form_submissions: 23, spend: 0, budget_cap: 0 },
+  { id: "c2", name: "Scottsdale Therapists — Email", channel: "email", status: "active", impressions: 412, clicks: 87, form_submissions: 11, spend: 0, budget_cap: 0 },
+  { id: "c3", name: "Greater Phoenix — Postcard", channel: "mail", status: "paused", impressions: 300, clicks: 0, form_submissions: 6, spend: 450, budget_cap: 1000 },
+];
+const DEMO_REFERRAL_QUEUE: any[] = [
+  { id: "r1", title: "Referral Fax Sheet — TMS Overview", item_type: "fax_sheet", status: "approved", preview_data: {}, created_at: "2026-02-27T09:00:00Z" },
+  { id: "r2", title: "Referral Fax Sheet — Ketamine Program", item_type: "fax_sheet", status: "pending", preview_data: {}, created_at: "2026-02-27T09:01:00Z" },
+  { id: "r3", title: "Email Sequence — PCPs Introduction", item_type: "email_sequence", status: "approved", preview_data: {}, created_at: "2026-02-27T09:02:00Z" },
+  { id: "r4", title: "Email Sequence — Follow-Up Series", item_type: "email_sequence", status: "pending", preview_data: {}, created_at: "2026-02-27T09:03:00Z" },
+  { id: "r5", title: "Voicemail Script — Introduction", item_type: "voicemail_script", status: "approved", preview_data: {}, created_at: "2026-02-27T09:04:00Z" },
+  { id: "r6", title: "Voicemail Script — Follow-Up", item_type: "voicemail_script", status: "approved", preview_data: {}, created_at: "2026-02-27T09:05:00Z" },
+  { id: "r7", title: "Voicemail Script — Final Touch", item_type: "voicemail_script", status: "pending", preview_data: {}, created_at: "2026-02-27T09:06:00Z" },
+  { id: "r8", title: "Postcard — Practice Overview", item_type: "postcard", status: "pending", preview_data: {}, created_at: "2026-02-27T09:07:00Z" },
+];
+
 // ─── Main Page ───────────────────────────────────────────────────
 export default function ReferralPage() {
   const { companyId } = useParams<{ companyId: string }>();
@@ -119,6 +150,14 @@ export default function ReferralPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const loadDemoData = () => {
+    setLeads(DEMO_LEADS);
+    setCampaigns(DEMO_CAMPAIGNS);
+    setQueueItems(DEMO_REFERRAL_QUEUE);
+    setLoading(false);
+    showToast("Demo data loaded — explore leads, pipeline, and collateral!");
   };
 
   const handleGenerateLeads = async () => {
@@ -219,6 +258,13 @@ export default function ReferralPage() {
             <p className="text-emerald-100 text-sm mt-1">Provider leads · Multi-channel outreach · 30-day sequences</p>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={loadDemoData}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+            >
+              <Zap className="w-4 h-4" />
+              Load Demo
+            </button>
             <button
               onClick={handleGenerateLeads}
               disabled={generatingLeads}

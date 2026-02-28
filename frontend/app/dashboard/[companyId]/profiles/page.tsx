@@ -225,6 +225,24 @@ function PlatformProfileCard({
   );
 }
 
+// ─── Demo Data ───────────────────────────────────────────────────
+const DEMO_SCORECARD: Scorecard = {
+  overall_score: 74,
+  claimed_profiles: 5,
+  total_platforms: 9,
+  platforms: [
+    { platform: "google_business_profile", platform_name: "Google Business Profile", exists: true, is_claimed: true, completeness_score: 96, review_count: 142, average_rating: 4.8, auto_create_status: "completed", content_generated: true, credentials_stored: true, missing_fields: ["holiday_hours"], optimization_score: 96 },
+    { platform: "psychology_today", platform_name: "Psychology Today", exists: true, is_claimed: true, completeness_score: 88, review_count: 31, average_rating: 4.9, auto_create_status: "completed", content_generated: true, credentials_stored: true, missing_fields: ["video_introduction"], optimization_score: 88 },
+    { platform: "therapyden", platform_name: "TherapyDen", exists: true, is_claimed: true, completeness_score: 72, review_count: 8, average_rating: 4.7, auto_create_status: "completed", content_generated: true, credentials_stored: true, missing_fields: ["sliding_scale", "specialties_detail"], optimization_score: 72 },
+    { platform: "healthgrades", platform_name: "Healthgrades", exists: true, is_claimed: false, completeness_score: 61, review_count: 19, average_rating: 4.6, auto_create_status: "needs_manual", content_generated: true, credentials_stored: false, missing_fields: ["office_photo", "insurance_list", "languages"], optimization_score: 61 },
+    { platform: "zocdoc", platform_name: "Zocdoc", exists: true, is_claimed: true, completeness_score: 84, review_count: 67, average_rating: 4.9, auto_create_status: "completed", content_generated: true, credentials_stored: true, missing_fields: ["video_visit_toggle"], optimization_score: 84 },
+    { platform: "vitals", platform_name: "Vitals", exists: false, is_claimed: false, completeness_score: 0, review_count: 0, average_rating: null, auto_create_status: "not_started", content_generated: false, credentials_stored: false, missing_fields: ["bio", "photo", "credentials", "specialties"], optimization_score: 0 },
+    { platform: "yelp", platform_name: "Yelp", exists: true, is_claimed: false, completeness_score: 45, review_count: 23, average_rating: 4.5, auto_create_status: "pending", content_generated: true, credentials_stored: false, missing_fields: ["business_description", "photos", "special_hours"], optimization_score: 45 },
+    { platform: "webmd", platform_name: "WebMD / Medscape", exists: false, is_claimed: false, completeness_score: 0, review_count: 0, average_rating: null, auto_create_status: "not_started", content_generated: false, credentials_stored: false, missing_fields: ["credentials", "bio", "photo", "specialties"], optimization_score: 0 },
+    { platform: "samhsa", platform_name: "SAMHSA Locator", exists: false, is_claimed: false, completeness_score: 0, review_count: 0, average_rating: null, auto_create_status: "not_started", content_generated: false, credentials_stored: false, missing_fields: ["license", "services", "location", "modalities"], optimization_score: 0 },
+  ],
+};
+
 // ─── Main Page ───────────────────────────────────────────────────
 export default function ProfilesPage() {
   const { companyId } = useParams<{ companyId: string }>();
@@ -244,6 +262,12 @@ export default function ProfilesPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const loadDemoData = () => {
+    setScorecard(DEMO_SCORECARD);
+    setLoading(false);
+    showToast("Demo data loaded — explore all 9 platform profiles!");
   };
 
   const handleGenerateContent = async (platform: string) => {
@@ -319,6 +343,13 @@ export default function ProfilesPage() {
             <p className="text-pink-100 text-sm mt-1">9 healthcare directories · Playwright automation · Review tracking</p>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={loadDemoData}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+            >
+              <Zap className="w-4 h-4" />
+              Load Demo
+            </button>
             <button
               onClick={() => handleGenerateContent("all")}
               disabled={!!generating}

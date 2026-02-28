@@ -118,6 +118,36 @@ function CalendarCell({ week, items }: { week: number; items: Array<{ type: stri
   );
 }
 
+// ─── Demo Data ───────────────────────────────────────────────────
+const DEMO_ITEMS: ContentItem[] = [
+  { id: "ci1", title: "TMS Therapy: A Complete Patient Guide", body: "Transcranial Magnetic Stimulation (TMS) therapy is a non-invasive, FDA-cleared treatment for depression that uses magnetic pulses to stimulate nerve cells in the brain. Unlike medication, TMS has minimal systemic side effects and doesn't require anesthesia...", content_type: "blog_post", status: "published", target_keyword: "TMS therapy guide", created_at: "2026-02-20T10:00:00Z" },
+  { id: "ci2", title: "5 Signs You Might Benefit from Ketamine Therapy", body: "Ketamine therapy has emerged as a breakthrough treatment for people with treatment-resistant depression. If you've tried two or more antidepressants without success, experienced suicidal ideation, or have been diagnosed with PTSD or CRPS, ketamine therapy may be right for you...", content_type: "blog_post", status: "approved", target_keyword: "ketamine therapy signs", created_at: "2026-02-22T10:00:00Z" },
+  { id: "ci3", title: "Understanding Treatment-Resistant Depression", body: "Treatment-resistant depression (TRD) affects approximately 30% of patients with major depressive disorder. It's defined as failing to respond adequately to at least two different antidepressant treatments. But TRD doesn't mean hopeless — TMS and ketamine offer new paths to recovery...", content_type: "blog_post", status: "pending_review", target_keyword: "treatment resistant depression", created_at: "2026-02-24T10:00:00Z" },
+  { id: "ci4", title: "TMS vs. ECT: Which Is Right for You?", body: "Both TMS (Transcranial Magnetic Stimulation) and ECT (Electroconvulsive Therapy) are effective treatments for severe depression. But they differ significantly in procedure, side effects, and recovery time. Here's what you need to know...", content_type: "blog_post", status: "draft", target_keyword: "TMS vs ECT comparison", created_at: "2026-02-26T10:00:00Z" },
+  { id: "ci5", title: "Real stories: How TMS Changed My Life", body: "When you've tried medication after medication with little relief, it can feel like there's no way out of the darkness. That's exactly where our patient Sarah was before she discovered TMS therapy at our Phoenix clinic...", content_type: "social_facebook", status: "published", created_at: "2026-02-21T10:00:00Z" },
+  { id: "ci6", title: "Did you know TMS therapy has a 60%+ success rate?", body: "Studies consistently show that TMS therapy helps 60-70% of patients with treatment-resistant depression. And unlike medication, TMS works at the source — gently stimulating the exact brain regions responsible for mood regulation...", content_type: "social_facebook", status: "approved", created_at: "2026-02-23T10:00:00Z" },
+  { id: "ci7", title: "Your mental health journey matters", body: "At [Practice Name], we believe everyone deserves access to cutting-edge mental health treatment. That's why we accept most major insurance plans for TMS therapy and offer flexible scheduling to fit your life...", content_type: "social_facebook", status: "pending_review", created_at: "2026-02-25T10:00:00Z" },
+  { id: "ci8", title: "TMS therapy — hope without medication", body: "Swipe to learn how TMS therapy is changing lives in Phoenix. No medication. No anesthesia. Just gentle magnetic pulses and real results. Most insurance accepted. Link in bio to book your free consultation.", content_type: "social_instagram", status: "published", created_at: "2026-02-20T10:00:00Z" },
+  { id: "ci9", title: "5 questions to ask your doctor about TMS", body: "Before your TMS consultation, come prepared! Ask about: success rates for your specific diagnosis, what to expect during sessions, insurance coverage, how many sessions you'll need, and what happens if TMS doesn't work. We answer all of these at your free intake appointment.", content_type: "social_instagram", status: "approved", created_at: "2026-02-22T10:00:00Z" },
+  { id: "ci10", title: "Why leading psychiatrists refer patients to TMS", body: "For healthcare providers: TMS therapy offers your treatment-resistant patients a proven, non-pharmacological path forward. Our co-management model means you stay informed at every step. Fax us a referral or call our provider line to learn more.", content_type: "social_linkedin", status: "published", created_at: "2026-02-21T10:00:00Z" },
+  { id: "ci11", title: "The clinical evidence behind TMS therapy", body: "Over 30 randomized controlled trials have validated TMS therapy's effectiveness for major depressive disorder. The landmark NeuroStar trial showed a 58% response rate and 37% remission rate. Here's what the latest research means for your patients...", content_type: "social_linkedin", status: "pending_review", created_at: "2026-02-25T10:00:00Z" },
+  { id: "ci12", title: "Monthly Newsletter: Advances in Mental Health Care", body: "Welcome to our February 2026 newsletter. This month, we're sharing the latest research on TMS therapy, a spotlight on our new ketamine infusion program, and patient success stories that remind us why we do this work every day...", content_type: "email_sequence", status: "approved", created_at: "2026-02-23T10:00:00Z" },
+];
+const DEMO_CALENDAR: CalendarEntry[] = [
+  { week: 1, items: [{ type: "blog_post", topic: "TMS Patient Guide" }, { type: "social_facebook", topic: "Patient Story" }, { type: "social_instagram", topic: "TMS FAQ" }] },
+  { week: 2, items: [{ type: "email", topic: "Feb Newsletter" }, { type: "social_linkedin", topic: "Clinical Evidence" }, { type: "social_facebook", topic: "Awareness Post" }] },
+  { week: 3, items: [{ type: "blog_post", topic: "Ketamine Therapy Signs" }, { type: "social_instagram", topic: "Hope Message" }, { type: "social_facebook", topic: "Success Rate Stats" }] },
+  { week: 4, items: [{ type: "social_facebook", topic: "Patient Testimonial" }, { type: "social_linkedin", topic: "Provider Referral" }, { type: "email", topic: "Patient Follow-Up" }] },
+  { week: 5, items: [{ type: "blog_post", topic: "Treatment-Resistant Depression" }, { type: "social_instagram", topic: "Mental Health Tip" }] },
+  { week: 6, items: [{ type: "social_facebook", topic: "Community Event" }, { type: "email", topic: "Monthly Roundup" }, { type: "blog_post", topic: "TMS vs ECT" }] },
+  { week: 7, items: [{ type: "social_linkedin", topic: "Research Update" }, { type: "social_instagram", topic: "Staff Spotlight" }, { type: "social_facebook", topic: "Insurance Guide" }] },
+  { week: 8, items: [{ type: "blog_post", topic: "Insurance Coverage Guide" }, { type: "social_facebook", topic: "FAQ Roundup" }, { type: "email", topic: "Patient Resources" }] },
+  { week: 9, items: [{ type: "social_instagram", topic: "Inspiration Quote" }, { type: "social_linkedin", topic: "Industry News" }] },
+  { week: 10, items: [{ type: "blog_post", topic: "Depression vs Anxiety" }, { type: "social_facebook", topic: "Mental Health Awareness" }, { type: "email", topic: "Q2 Newsletter" }] },
+  { week: 11, items: [{ type: "social_instagram", topic: "Treatment Journey" }, { type: "social_linkedin", topic: "Case Study" }, { type: "social_facebook", topic: "Provider Spotlight" }] },
+  { week: 12, items: [{ type: "blog_post", topic: "Q2 Mental Health Roundup" }, { type: "social_facebook", topic: "Quarter Recap" }, { type: "social_instagram", topic: "Looking Ahead" }] },
+];
+
 // ─── Main Page ───────────────────────────────────────────────────
 export default function ContentPage() {
   const { companyId } = useParams<{ companyId: string }>();
@@ -143,6 +173,13 @@ export default function ContentPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const loadDemoData = () => {
+    setItems(DEMO_ITEMS);
+    setCalendar(DEMO_CALENDAR);
+    setLoading(false);
+    showToast("Demo data loaded — content library and 12-week calendar are now populated!");
   };
 
   const handleGenerate = async (type: string) => {
@@ -228,6 +265,13 @@ export default function ContentPage() {
             <p className="text-violet-100 text-sm mt-1">Blog posts · Social media · 12-week editorial calendar</p>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={loadDemoData}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+            >
+              <Zap className="w-4 h-4" />
+              Load Demo
+            </button>
             <button
               onClick={() => handleGenerate("blog")}
               disabled={!!generating}

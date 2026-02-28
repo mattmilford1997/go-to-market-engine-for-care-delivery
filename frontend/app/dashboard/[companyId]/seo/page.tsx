@@ -129,6 +129,41 @@ function StatCard({ icon, label, value, sub, accent }: { icon: React.ReactNode; 
   );
 }
 
+// ─── Demo Data ───────────────────────────────────────────────────
+const DEMO_REPORT: SEOReport = {
+  pagespeed_mobile: 71,
+  pagespeed_desktop: 94,
+  core_web_vitals: { lcp: 2100, fid: 65, cls: 0.04, inp: 175 },
+  crawl_errors: 3,
+  meta_issues: 7,
+  schema_issues: 2,
+  nap_consistency: 78,
+  ranking_keywords: [
+    { keyword: "TMS therapy Phoenix", position: 4, volume: 1300, change: 2 },
+    { keyword: "TMS therapy success rate", position: 2, volume: 1800, change: 1 },
+    { keyword: "TMS vs ECT therapy", position: 3, volume: 590, change: 5 },
+    { keyword: "mental health clinic Scottsdale", position: 6, volume: 720, change: 0 },
+    { keyword: "treatment resistant depression help", position: 9, volume: 1100, change: 2 },
+    { keyword: "psychiatrist Phoenix accepting new patients", position: 5, volume: 590, change: 0 },
+    { keyword: "ketamine treatment Arizona", position: 7, volume: 880, change: -1 },
+    { keyword: "insurance covered mental health", position: 12, volume: 3300, change: 4 },
+    { keyword: "depression treatment center Phoenix", position: 11, volume: 2400, change: 3 },
+    { keyword: "TMS therapy near me", position: 14, volume: 8100, change: 1 },
+    { keyword: "anxiety treatment without medication", position: 16, volume: 4400, change: 3 },
+    { keyword: "ketamine infusion therapy cost", position: 18, volume: 2200, change: -2 },
+  ],
+  recommendations: [
+    { issue: "Missing H1 tags on 4 service pages", priority: "high", fix: "Add descriptive H1 tags to each service page including TMS, Ketamine, and Depression Treatment pages", category: "On-Page", impact: "+8–12 positions for target keywords" },
+    { issue: "Mobile PageSpeed below 75", priority: "high", fix: "Optimize images with WebP format, defer non-critical JavaScript, and enable browser caching for static assets", category: "Technical", impact: "+15 mobile score points" },
+    { issue: "3 broken internal links found", priority: "high", fix: "Update or remove broken links on the blog archive, services navigation, and footer", category: "Technical", impact: "Fixes all 3 crawl errors" },
+    { issue: "Ketamine pages lack E-E-A-T signals", priority: "high", fix: "Add physician credentials, peer-reviewed citations, and patient outcome statistics to all ketamine therapy pages", category: "Content", impact: "+authority score, better rankings" },
+    { issue: "No schema markup on provider profiles", priority: "medium", fix: "Add MedicalBusiness and Physician JSON-LD schema to all provider profile and location pages", category: "Schema", impact: "Rich snippet eligibility in SERPs" },
+    { issue: "7 pages missing meta descriptions", priority: "medium", fix: "Write unique 155–160 character meta descriptions for all service and location pages", category: "On-Page", impact: "+10–20% CTR improvement" },
+    { issue: "No Google Business Profile posts in 30 days", priority: "medium", fix: "Publish weekly Google Business Profile posts linking to new blog content and service updates", category: "Local SEO", impact: "+local pack visibility" },
+    { issue: "Missing alt text on 12 images", priority: "low", fix: "Add descriptive alt text to all content images including staff photos, treatment facility images, and infographics", category: "Accessibility", impact: "Image search indexing" },
+  ],
+};
+
 // ─── Main Page ───────────────────────────────────────────────────
 export default function SEOPage() {
   const { companyId } = useParams<{ companyId: string }>();
@@ -156,6 +191,14 @@ export default function SEOPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const loadDemoData = () => {
+    setReport(DEMO_REPORT);
+    setKeywords(DEMO_REPORT.ranking_keywords || []);
+    setRecommendations(DEMO_REPORT.recommendations || []);
+    setLoading(false);
+    showToast("Demo SEO report loaded — explore scores, vitals, keywords, and recommendations!");
   };
 
   const handleAudit = async () => {
@@ -227,6 +270,13 @@ export default function SEOPage() {
             <p className="text-blue-100 text-sm mt-1">Technical audit · PageSpeed · Keyword rankings · Recommendations</p>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={loadDemoData}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+            >
+              <Zap className="w-4 h-4" />
+              Load Demo
+            </button>
             <button
               onClick={handlePagespeed}
               disabled={runningPagespeed || runningAudit}
