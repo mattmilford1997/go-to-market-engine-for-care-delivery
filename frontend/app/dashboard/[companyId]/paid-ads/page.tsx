@@ -101,10 +101,21 @@ const DEMO_QUEUE_ITEMS: ApprovalItem[] = [
   { id: "q8", title: "Meta Ad — Provider Outreach", item_type: "meta_ad_copy", status: "approved", preview_data: { primary_text: "Partner with us to offer your patients TMS therapy. We handle all insurance verification and co-management support." }, created_at: "2026-02-27T10:07:00Z" },
 ];
 
+const ALL_PLATFORMS = [
+  { id: "google", name: "Google Ads", icon: "G", color: "#4285f4", bg: "bg-blue-50 border-blue-200", desc: "Search & Display", formats: "RSA · PMax · Display", best_for: "High-intent patients", avg_cpc: "$8–$22" },
+  { id: "meta", name: "Meta Ads", icon: "f", color: "#1877f2", bg: "bg-indigo-50 border-indigo-200", desc: "Facebook + Instagram", formats: "Feed · Stories · Reels · Lead Gen", best_for: "Awareness + retargeting", avg_cpc: "$2–$8" },
+  { id: "reddit", name: "Reddit Ads", icon: "R", color: "#ff4500", bg: "bg-orange-50 border-orange-200", desc: "Community targeting", formats: "Promoted Post · Video", best_for: "r/depression · r/anxiety · r/mentalhealth", avg_cpc: "$1–$4" },
+  { id: "microsoft", name: "Microsoft / Bing", icon: "M", color: "#00a4ef", bg: "bg-sky-50 border-sky-200", desc: "Bing + LinkedIn network", formats: "RSA · Dynamic Search", best_for: "Older adults, higher income", avg_cpc: "$5–$15" },
+  { id: "quora", name: "Quora Ads", icon: "Q", color: "#b92b27", bg: "bg-red-50 border-red-200", desc: "Question-intent targeting", formats: "Promoted Answer · Image", best_for: "Research-phase patients", avg_cpc: "$2–$6" },
+  { id: "tiktok", name: "TikTok Ads", icon: "T", color: "#010101", bg: "bg-slate-100 border-slate-300", desc: "Short-form video", formats: "In-Feed · TopView · Spark Ads", best_for: "Gen Z + Millennial audiences", avg_cpc: "$1–$3" },
+  { id: "linkedin", name: "LinkedIn Ads", icon: "in", color: "#0077b5", bg: "bg-blue-50 border-blue-300", desc: "Professional targeting", formats: "Sponsored Content · Message", best_for: "PCPs · therapists · HR / EAP", avg_cpc: "$8–$20" },
+  { id: "pinterest", name: "Pinterest Ads", icon: "P", color: "#e60023", bg: "bg-rose-50 border-rose-200", desc: "Visual discovery", formats: "Promoted Pin · Video Pin", best_for: "Women 25–54, wellness content", avg_cpc: "$1–$3" },
+];
+
 // ─── Main Page ───────────────────────────────────────────────────
 export default function PaidAdsPage() {
   const { companyId } = useParams<{ companyId: string }>();
-  const [tab, setTab] = useState<"google" | "meta">("google");
+  const [tab, setTab] = useState<string>("google");
   const [budgetRecs, setBudgetRecs] = useState<BudgetRec[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [queueItems, setQueueItems] = useState<ApprovalItem[]>([]);
@@ -138,17 +149,14 @@ export default function PaidAdsPage() {
     showToast("Demo data loaded — all visualizations are now populated!");
   };
 
-  const handleGenerate = async (type: "google" | "meta") => {
+  const handleGenerate = async (type: string) => {
     setGenerating(type);
     try {
-      if (type === "google") {
-        await paidAdsApi.generateAllGoogle(companyId);
-        showToast("Google Ads assets queued for generation — check Approval Queue shortly.");
-      } else {
-        await paidAdsApi.generateAllMeta(companyId);
-        showToast("Meta Ads assets queued for generation — check Approval Queue shortly.");
-      }
-      // Re-fetch queue
+      if (type === "google") await paidAdsApi.generateAllGoogle(companyId);
+      else if (type === "meta") await paidAdsApi.generateAllMeta(companyId);
+      else await paidAdsApi.generatePlatform(companyId, type);
+      const plat = ALL_PLATFORMS.find((p) => p.id === type);
+      showToast(`${plat?.name || type} ads queued for generation — check Approval Queue shortly.`);
       const q = await approvalApi.queue(companyId, "paid_ads").catch(() => ({ data: { items: [] } }));
       setQueueItems(q.data.items || []);
     } catch {
@@ -160,6 +168,7 @@ export default function PaidAdsPage() {
 
   const googleItems = queueItems.filter((i) => i.item_type?.includes("google") || i.item_type?.includes("keyword"));
   const metaItems = queueItems.filter((i) => i.item_type?.includes("meta") || i.item_type?.includes("audience"));
+  const platformItems = (platform: string) => queueItems.filter((i) => i.item_type?.includes(platform));
   const pendingCount = queueItems.filter((i) => i.status === "pending").length;
 
   const chartData = budgetRecs.map((r) => ({
@@ -244,20 +253,38 @@ export default function PaidAdsPage() {
           </p>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
-          {(["google", "meta"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cn(
-                "px-5 py-2 rounded-lg text-sm font-medium transition-all",
-                tab === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              {t === "google" ? "🔍 Google Ads" : "📘 Meta Ads"}
-            </button>
-          ))}
+        {/* Platform Grid */}
+        <div className="grid grid-cols-4 gap-3">
+          {ALL_PLATFORMS.map((p) => {
+            const pItems = p.id === "google" ? googleItems : p.id === "meta" ? metaItems : platformItems(p.id);
+            return (
+              <div
+                key={p.id}
+                onClick={() => setTab(p.id)}
+                className={cn(
+                  "card border p-4 cursor-pointer transition-all",
+                  p.bg,
+                  tab === p.id ? "ring-2 ring-offset-1" : "hover:scale-[1.01]"
+                )}
+                style={tab === p.id ? { ringColor: p.color } as React.CSSProperties : {}}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+                    style={{ background: p.color }}>
+                    {p.icon}
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900 leading-tight">{p.name}</p>
+                </div>
+                <p className="text-xs text-slate-500 leading-snug mb-2">{p.desc}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">{p.avg_cpc} CPC</span>
+                  {pItems.length > 0 && (
+                    <span className="text-xs font-medium text-emerald-600">{pItems.length} ads</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Google Ads Tab */}
@@ -519,6 +546,162 @@ export default function PaidAdsPage() {
             </div>
           </div>
         )}
+
+        {/* Generic Platform Tabs (Reddit, Microsoft, Quora, TikTok, LinkedIn, Pinterest) */}
+        {!["google", "meta"].includes(tab) && (() => {
+          const plat = ALL_PLATFORMS.find((p) => p.id === tab);
+          if (!plat) return null;
+          const items = platformItems(tab);
+          return (
+            <div className="space-y-6 fade-in">
+              {/* Platform Overview */}
+              <div className={cn("card border p-6", plat.bg)}>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-black shrink-0"
+                      style={{ background: plat.color }}>
+                      {plat.icon}
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">{plat.name}</h2>
+                      <p className="text-sm text-slate-600 mt-0.5">{plat.desc}</p>
+                      <div className="flex flex-wrap gap-3 mt-3 text-xs">
+                        <span className="flex gap-1.5"><span className="font-semibold text-slate-700">Formats:</span><span className="text-slate-600">{plat.formats}</span></span>
+                        <span className="flex gap-1.5"><span className="font-semibold text-slate-700">Best for:</span><span className="text-slate-600">{plat.best_for}</span></span>
+                        <span className="flex gap-1.5"><span className="font-semibold text-slate-700">Avg CPC:</span><span className="text-slate-600">{plat.avg_cpc}</span></span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleGenerate(tab)}
+                    disabled={!!generating}
+                    className="flex items-center gap-2 px-5 py-2.5 text-white rounded-xl text-sm font-semibold disabled:opacity-50 shrink-0"
+                    style={{ background: plat.color }}
+                  >
+                    {generating === tab ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    Generate {plat.name} Ads
+                  </button>
+                </div>
+              </div>
+
+              {/* Generated ads for this platform */}
+              <div className="card p-6">
+                <SectionHeader
+                  title={`Generated ${plat.name} Ads`}
+                  subtitle={`AI-generated copy tailored for ${plat.name} — pending approval before launch`}
+                />
+                {items.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center text-white text-2xl font-black opacity-20"
+                      style={{ background: plat.color }}>
+                      {plat.icon}
+                    </div>
+                    <p className="text-slate-500 text-sm font-medium">No {plat.name} ads generated yet</p>
+                    <p className="text-slate-400 text-xs mt-1 mb-4">Click "Generate {plat.name} Ads" to create platform-specific copy</p>
+                    <button
+                      onClick={() => handleGenerate(tab)}
+                      disabled={!!generating}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                      style={{ background: plat.color }}
+                    >
+                      {generating === tab ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                      Generate Now
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {items.map((item) => (
+                      <div key={item.id} className="border border-slate-100 rounded-xl p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                            {item.preview_data?.body && (
+                              <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-3">{item.preview_data.body}</p>
+                            )}
+                          </div>
+                          <StatusBadge status={item.status} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Platform-specific tips */}
+              <div className="card p-6">
+                <SectionHeader title={`${plat.name} Best Practices`} subtitle="Healthcare advertising guidelines for this platform" />
+                <div className="grid grid-cols-2 gap-3">
+                  {tab === "reddit" && [
+                    { tip: "Lead with value, not the sell", detail: "Reddit users immediately recognize ads. Start with genuinely useful information before mentioning your clinic." },
+                    { tip: "Match the subreddit's tone", detail: "r/depression posts are raw and honest. r/mentalhealth is more supportive. Adapt your copy accordingly." },
+                    { tip: "Disclose it's an ad", detail: "Reddit's promoted posts are labeled, but extra transparency ('Promoted by [clinic name]') builds trust." },
+                    { tip: "Target mental health communities", detail: "Subreddits: r/depression, r/anxiety, r/mentalhealth, r/TMS, r/bipolar, r/ADHD, r/therapy." },
+                  ].map((t, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-orange-50 border border-orange-100">
+                      <p className="text-xs font-semibold text-orange-900">{t.tip}</p>
+                      <p className="text-xs text-orange-700 mt-1">{t.detail}</p>
+                    </div>
+                  ))}
+                  {tab === "microsoft" && [
+                    { tip: "Import from Google Ads", detail: "Microsoft lets you import existing Google campaigns directly — start there to save time." },
+                    { tip: "LinkedIn profile targeting", detail: "Unique to Microsoft: target by LinkedIn job title, company, or industry within Bing search." },
+                    { tip: "Older demographic advantage", detail: "Bing users skew 45+ with higher income — great fit for premium mental health services." },
+                    { tip: "Lower competition", detail: "CPC is typically 30–50% lower than Google for the same keywords." },
+                  ].map((t, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-sky-50 border border-sky-100">
+                      <p className="text-xs font-semibold text-sky-900">{t.tip}</p>
+                      <p className="text-xs text-sky-700 mt-1">{t.detail}</p>
+                    </div>
+                  ))}
+                  {tab === "quora" && [
+                    { tip: "Answer the question first", detail: "Quora users are in research mode. A helpful 3-sentence answer before mentioning your clinic performs best." },
+                    { tip: "Target specific questions", detail: "e.g., 'What is TMS therapy?', 'How to find a psychiatrist who accepts insurance', 'Does TMS work for anxiety?'" },
+                    { tip: "Add credentials", detail: "Mention provider qualifications in the answer — Quora users trust authoritative, expert-sounding responses." },
+                    { tip: "Topic targeting", detail: "Target topics: Depression, Anxiety Disorders, ADHD, Mental Health Treatment, Psychiatry." },
+                  ].map((t, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-red-50 border border-red-100">
+                      <p className="text-xs font-semibold text-red-900">{t.tip}</p>
+                      <p className="text-xs text-red-700 mt-1">{t.detail}</p>
+                    </div>
+                  ))}
+                  {tab === "tiktok" && [
+                    { tip: "Hook within 2 seconds", detail: "If you don't stop the scroll in the first 2 seconds, users swipe away. Lead with your most compelling visual or text." },
+                    { tip: "Sound-off captions required", detail: "~85% of TikTok ads are watched without sound. Every key message must be readable on screen." },
+                    { tip: "Avoid polished corporate video", detail: "Authentic, slightly unpolished content outperforms studio-quality ads on TikTok by 2–3x." },
+                    { tip: "HIPAA note", detail: "Never use real patient footage without written consent. Use actors + disclaimers: 'Actor portrayal.'" },
+                  ].map((t, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-slate-100 border border-slate-200">
+                      <p className="text-xs font-semibold text-slate-900">{t.tip}</p>
+                      <p className="text-xs text-slate-600 mt-1">{t.detail}</p>
+                    </div>
+                  ))}
+                  {tab === "linkedin" && [
+                    { tip: "B2B referral focus", detail: "Target PCPs, therapists, social workers, and HR managers for referral partnership ads — not consumer-facing." },
+                    { tip: "Message Ads for warm outreach", detail: "InMail-style messages to therapists and PCPs work well for introducing TMS co-treatment programs." },
+                    { tip: "Professional tone + clinical credibility", detail: "Cite outcome statistics, board certifications, and peer-reviewed protocols." },
+                    { tip: "EAP targeting", detail: "Target HR Benefits Managers and EAP (Employee Assistance Program) coordinators for corporate mental health partnerships." },
+                  ].map((t, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-blue-50 border border-blue-100">
+                      <p className="text-xs font-semibold text-blue-900">{t.tip}</p>
+                      <p className="text-xs text-blue-700 mt-1">{t.detail}</p>
+                    </div>
+                  ))}
+                  {tab === "pinterest" && [
+                    { tip: "Women 25–54 dominant audience", detail: "Pinterest skews heavily female and is strong for wellness, self-care, and mental health content." },
+                    { tip: "Long-form visual content works", detail: "Pinterest users save content for later. Infographics and educational posts about mental health perform well." },
+                    { tip: "Keyword + interest targeting", detail: "Target: mental health, therapy, anxiety relief, self-care, depression help, mindfulness." },
+                    { tip: "Link to blog content first", detail: "Pinterest users are in inspiration/research mode — link to an educational blog post before asking for a consultation." },
+                  ].map((t, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-rose-50 border border-rose-100">
+                      <p className="text-xs font-semibold text-rose-900">{t.tip}</p>
+                      <p className="text-xs text-rose-700 mt-1">{t.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

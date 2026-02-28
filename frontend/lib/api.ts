@@ -98,10 +98,13 @@ export const paidAdsApi = {
     api.post(`/paid-ads/${companyId}/google/generate-all`),
   generateAllMeta: (companyId: string) =>
     api.post(`/paid-ads/${companyId}/meta/generate-all`),
+  generatePlatform: (companyId: string, platform: string) =>
+    api.post(`/paid-ads/${companyId}/${platform}/generate-all`),
   audiences: (companyId: string) =>
     api.get(`/paid-ads/${companyId}/meta/audiences`),
   budgetRecs: (companyId: string) =>
     api.get(`/paid-ads/${companyId}/budget-recommendations`),
+  platforms: () => api.get("/paid-ads/platforms"),
 };
 
 // SEO
@@ -214,4 +217,29 @@ export const chatApi = {
     api.post(`/chat/${companyId}/message`, { message }),
   clearHistory: (companyId: string) =>
     api.delete(`/chat/${companyId}/history`),
+};
+
+// AEO (AI Engine Optimization)
+export const aeoApi = {
+  score: (companyId: string) => api.get(`/aeo/${companyId}/score`),
+  updateChecklist: (companyId: string, checkedIds: string[]) =>
+    api.post(`/aeo/${companyId}/checklist`, { checked_ids: checkedIds }),
+  generateFaqs: (companyId: string, topic: string) =>
+    api.post(`/aeo/${companyId}/generate-faqs`, { topic }),
+  generateSchema: (companyId: string, schemaType: string) =>
+    api.post(`/aeo/${companyId}/generate-schema`, { schema_type: schemaType }),
+  optimizeContent: (companyId: string, content: string, pageType?: string) =>
+    api.post(`/aeo/${companyId}/optimize-content`, { content, page_type: pageType }),
+};
+
+// Video Ad Generator
+export const videoApi = {
+  platforms: () => api.get("/video/platforms"),
+  ads: (companyId: string) => api.get(`/video/${companyId}/ads`),
+  generateScript: (companyId: string, data: Record<string, unknown>) =>
+    api.post(`/video/${companyId}/generate-script`, data),
+  generateConcepts: (companyId: string, topic: string) =>
+    api.post(`/video/${companyId}/generate-concepts`, { topic }),
+  deleteAd: (companyId: string, adId: string) =>
+    api.delete(`/video/${companyId}/ads/${adId}`),
 };

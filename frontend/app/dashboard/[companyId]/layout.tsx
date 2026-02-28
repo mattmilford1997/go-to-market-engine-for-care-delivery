@@ -29,7 +29,9 @@ const INTELLIGENCE = [
   { href: "/competitors", label: "Competitors", color: "text-red-400 hover:text-red-300", bg: "hover:bg-red-500/10", dot: "bg-red-400" },
   { href: "/reputation", label: "Reputation", color: "text-pink-400 hover:text-pink-300", bg: "hover:bg-pink-500/10", dot: "bg-pink-400" },
   { href: "/reports", label: "GTM Digest", color: "text-indigo-400 hover:text-indigo-300", bg: "hover:bg-indigo-500/10", dot: "bg-indigo-400" },
-  { href: "/templates", label: "Templates", color: "text-violet-400 hover:text-violet-300", bg: "hover:bg-violet-500/10", dot: "bg-violet-400" },
+  { href: "/aeo", label: "AI Engine SEO", color: "text-violet-400 hover:text-violet-300", bg: "hover:bg-violet-500/10", dot: "bg-violet-400" },
+  { href: "/video", label: "Video Ad Generator", color: "text-pink-400 hover:text-pink-300", bg: "hover:bg-pink-500/10", dot: "bg-pink-400" },
+  { href: "/templates", label: "Templates", color: "text-violet-300 hover:text-violet-200", bg: "hover:bg-violet-500/10", dot: "bg-violet-300" },
   { href: "/intake", label: "Intake Forms", color: "text-teal-400 hover:text-teal-300", bg: "hover:bg-teal-500/10", dot: "bg-teal-400" },
   { href: "/ask", label: "AI Strategy Chat", color: "text-sky-400 hover:text-sky-300", bg: "hover:bg-sky-500/10", dot: "bg-sky-400" },
 ];
