@@ -11,6 +11,7 @@ const mockCampaigns = jest.fn();
 const mockQueueItems = jest.fn();
 const mockGenerateLeads = jest.fn();
 const mockGenerateAllCollateral = jest.fn();
+const mockUploadLeadsCsv = jest.fn();
 
 jest.mock("@/lib/api", () => ({
   referralApi: {
@@ -18,6 +19,7 @@ jest.mock("@/lib/api", () => ({
     campaigns: (...args: any[]) => mockCampaigns(...args),
     generateLeads: (...args: any[]) => mockGenerateLeads(...args),
     generateAllCollateral: (...args: any[]) => mockGenerateAllCollateral(...args),
+    uploadLeadsCsv: (...args: any[]) => mockUploadLeadsCsv(...args),
   },
   approvalApi: {
     queue: (...args: any[]) => mockQueueItems(...args),
@@ -59,6 +61,9 @@ beforeEach(() => {
   mockQueueItems.mockResolvedValue({ data: sampleQueueItems });
   mockGenerateLeads.mockResolvedValue({ data: {} });
   mockGenerateAllCollateral.mockResolvedValue({ data: {} });
+  mockUploadLeadsCsv.mockResolvedValue({
+    data: { created: 2, errors: [], list_name: null, campaign_id: null, column_mapping: {}, unrecognized_columns: [] },
+  });
 });
 
 afterEach(() => {
@@ -197,6 +202,80 @@ describe("Referral module page", () => {
     await waitFor(() => {
       // Multiple NPPES badges expected
       expect(screen.getAllByText("NPPES").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("renders list name input for CSV upload", async () => {
+    render(<ReferralPage />);
+    await waitFor(() => {
+      const input = screen.getByPlaceholderText(/List name/i);
+      expect(input).toBeInTheDocument();
+    });
+  });
+
+  it("renders Upload CSV button", async () => {
+    render(<ReferralPage />);
+    await waitFor(() => {
+      expect(screen.getAllByText(/Upload CSV/i).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("hidden file input exists for CSV upload", async () => {
+    render(<ReferralPage />);
+    await waitFor(() => screen.getByText("Provider Leads"));
+    const fileInput = document.querySelector('input[type="file"][accept=".csv"]') as HTMLInputElement;
+    expect(fileInput).toBeTruthy();
+  });
+
+  it("uploads CSV with list name and shows toast", async () => {
+    mockUploadLeadsCsv.mockResolvedValue({
+      data: { created: 3, errors: [], list_name: "Pediatricians in Texas", campaign_id: "camp-1", column_mapping: {}, unrecognized_columns: [] },
+    });
+    render(<ReferralPage />);
+    await waitFor(() => screen.getByPlaceholderText(/List name/i));
+
+    // Set list name
+    fireEvent.change(screen.getByPlaceholderText(/List name/i), {
+      target: { value: "Pediatricians in Texas" },
+    });
+
+    // Trigger file upload
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["first_name,last_name\nJane,Doe"], "leads.csv", { type: "text/csv" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      expect(mockUploadLeadsCsv).toHaveBeenCalledWith("company-abc", file, "Pediatricians in Texas");
+    });
+  });
+
+  it("shows unrecognized column warning in toast", async () => {
+    mockUploadLeadsCsv.mockResolvedValue({
+      data: { created: 1, errors: [], list_name: null, campaign_id: null, column_mapping: {}, unrecognized_columns: ["custom_field"] },
+    });
+    render(<ReferralPage />);
+    await waitFor(() => screen.getByText("Provider Leads"));
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["first_name,custom_field\nJane,val"], "list.csv", { type: "text/csv" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      expect(screen.getByText(/unrecognized column/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows Load Demo button and loads demo data", async () => {
+    render(<ReferralPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Load Demo")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Load Demo"));
+    await waitFor(() => {
+      // Demo leads should appear
+      expect(screen.getByText(/Sarah/)).toBeInTheDocument();
     });
   });
 });

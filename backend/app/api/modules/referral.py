@@ -2,12 +2,13 @@
 Module 2: Referral Marketing Engine API routes.
 Handles lead list management, collateral generation, and campaign orchestration.
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 import csv
 import io
+import re
 import uuid
 
 from app.db.database import get_db
@@ -18,6 +19,82 @@ from app.services.llm import llm_service
 from app.services.nppes import generate_lead_list_for_company
 
 router = APIRouter(prefix="/referral", tags=["referral"])
+
+# ------------------------------------------------------------------ #
+# Smart CSV Column Mapping
+# ------------------------------------------------------------------ #
+
+# Comprehensive alias table — normalized (lowercase, alphanumeric only)
+_FIELD_ALIASES: dict[str, list[str]] = {
+    "npi": [
+        "npi", "npinumber", "nationalprovidernumber", "nationalprovidernumberidentifier",
+        "npiid", "npicode", "providernpi", "providernumber",
+    ],
+    "first_name": [
+        "firstname", "first", "fname", "givenname", "providerfirst", "providerfirstname",
+        "drfirst", "doctorfirst", "physfirst", "pfirst",
+    ],
+    "last_name": [
+        "lastname", "last", "lname", "surname", "familyname", "providerlast",
+        "providerlastname", "drlast", "doctorlast", "physlast", "plast",
+    ],
+    "credentials": [
+        "credentials", "credential", "degree", "degrees", "suffix", "designation",
+        "cert", "certification", "licensetype", "title", "mddodegree",
+    ],
+    "specialty": [
+        "specialty", "speciality", "specialties", "primaryspecialty", "medicalspecialty",
+        "taxonomy", "taxonomycode", "practicespecialty", "fieldofpractice", "discipline",
+    ],
+    "practice_name": [
+        "practicename", "practice", "organization", "org", "groupname", "group",
+        "clinic", "clinicname", "hospital", "hospitalname", "officename", "employer",
+        "facilityname", "institutionname", "company",
+    ],
+    "fax": [
+        "fax", "faxnumber", "faxno", "faxphone", "officefax", "directfax", "faxline",
+    ],
+    "phone": [
+        "phone", "phonenumber", "telephone", "tel", "mobile", "cell", "officephone",
+        "officetelephone", "workphone", "contactphone", "directphone", "mainnumber",
+    ],
+    "email": [
+        "email", "emailaddress", "eaddress", "mail", "contactemail", "officeemail",
+        "workemail", "electronicmail",
+    ],
+    "address": [
+        "address", "address1", "streetaddress", "street", "officeaddress",
+        "mailingaddress", "addr", "streetline1", "practiceaddress",
+    ],
+    "city": [
+        "city", "town", "municipality", "officecity", "practicecity",
+    ],
+    "state": [
+        "state", "statecode", "st", "province", "stateabbr", "officestate",
+        "practicestate",
+    ],
+    "zip": [
+        "zip", "zipcode", "postalcode", "postal", "postcode", "officezipcode",
+        "practicezipcode",
+    ],
+}
+
+
+def _normalize_col(header: str) -> str:
+    """Lowercase + strip all non-alphanumeric characters for fuzzy matching."""
+    return re.sub(r"[^a-z0-9]", "", header.lower().strip())
+
+
+def _map_columns(fieldnames: list[str]) -> dict[str, str]:
+    """Return {actual_csv_header: canonical_field_name} for all recognized columns."""
+    mapping: dict[str, str] = {}
+    for header in fieldnames:
+        normalized = _normalize_col(header)
+        for canonical, aliases in _FIELD_ALIASES.items():
+            if normalized in aliases:
+                mapping[header] = canonical
+                break
+    return mapping
 
 # Campaign sequence template — 30-day multi-touch
 CAMPAIGN_SEQUENCE = [
@@ -75,42 +152,102 @@ async def generate_leads(
 async def upload_leads_csv(
     company_id: str,
     file: UploadFile = File(...),
+    list_name: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Upload leads from CSV. Template: npi,first_name,last_name,specialty,practice_name,fax,phone,email,address,city,state,zip"""
+    """Upload leads from CSV with automatic column name detection.
+
+    Recognizes common header variations — "First Name", "firstname", "fname",
+    "Provider First Name", "NPI Number", "Fax #", etc. — automatically.
+    Pass an optional list_name to label this batch (e.g. "Pediatricians in Texas"),
+    which creates a named Campaign and enrolls all uploaded leads into it.
+    """
     _get_company(company_id, db)
 
-    contents = await file.read()
-    reader = csv.DictReader(io.StringIO(contents.decode("utf-8")))
+    # Decode — handle Excel UTF-8 BOM and Latin-1 fallback
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    fieldnames: list[str] = list(reader.fieldnames or [])
+    col_map = _map_columns(fieldnames)
+    unrecognized = [h for h in fieldnames if h not in col_map]
+
     created = 0
-    errors = []
+    errors: list[dict] = []
+    lead_ids: list[str] = []
 
     for i, row in enumerate(reader):
         try:
+            # Apply alias mapping; strip whitespace from values
+            mapped = {
+                col_map.get(k, k): (v.strip() if isinstance(v, str) else v)
+                for k, v in row.items()
+            }
             lead = ReferralLead(
                 company_id=company_id,
-                npi=row.get("npi", ""),
-                first_name=row.get("first_name", ""),
-                last_name=row.get("last_name", ""),
-                credentials=row.get("credentials", ""),
-                specialty=row.get("specialty", ""),
-                practice_name=row.get("practice_name", ""),
-                fax=row.get("fax", ""),
-                phone=row.get("phone", ""),
-                email=row.get("email", ""),
-                address=row.get("address", ""),
-                city=row.get("city", ""),
-                state=row.get("state", ""),
-                zip_code=row.get("zip", ""),
+                npi=mapped.get("npi", ""),
+                first_name=mapped.get("first_name", ""),
+                last_name=mapped.get("last_name", ""),
+                credentials=mapped.get("credentials", ""),
+                specialty=mapped.get("specialty", ""),
+                practice_name=mapped.get("practice_name", ""),
+                fax=mapped.get("fax", ""),
+                phone=mapped.get("phone", ""),
+                email=mapped.get("email", ""),
+                address=mapped.get("address", ""),
+                city=mapped.get("city", ""),
+                state=mapped.get("state", ""),
+                zip_code=mapped.get("zip", ""),
                 source="csv_upload",
             )
             db.add(lead)
+            db.flush()
+            lead_ids.append(str(lead.id))
             created += 1
         except Exception as e:
             errors.append({"row": i + 1, "error": str(e)})
 
+    # If a list name was provided, create a Campaign and enroll all leads
+    campaign_id: Optional[str] = None
+    if list_name and lead_ids:
+        from datetime import date
+        campaign = Campaign(
+            company_id=company_id,
+            name=list_name.strip()[:200],
+            module="referral",
+            channel="csv_upload",
+            status="draft",
+            settings={
+                "source_file": file.filename,
+                "column_mapping": col_map,
+                "lead_count": created,
+            },
+        )
+        db.add(campaign)
+        db.flush()
+        for lid in lead_ids:
+            enrollment = CampaignEnrollment(
+                campaign_id=campaign.id,
+                lead_id=lid,
+                current_step=0,
+                next_action_date=date.today(),
+            )
+            db.add(enrollment)
+        campaign_id = str(campaign.id)
+
     db.commit()
-    return {"created": created, "errors": errors}
+    return {
+        "created": created,
+        "errors": errors,
+        "list_name": list_name,
+        "campaign_id": campaign_id,
+        "column_mapping": col_map,
+        "unrecognized_columns": unrecognized,
+    }
 
 
 @router.get("/{company_id}/leads/{lead_id}")

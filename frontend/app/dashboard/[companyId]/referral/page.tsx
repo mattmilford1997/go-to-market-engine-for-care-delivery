@@ -1,6 +1,6 @@
 "use client";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { referralApi, approvalApi } from "@/lib/api";
 import { formatNumber, cn } from "@/lib/utils";
 import {
@@ -132,7 +132,10 @@ export default function ReferralPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generatingLeads, setGeneratingLeads] = useState(false);
+  const [uploadingCsv, setUploadingCsv] = useState(false);
+  const [listName, setListName] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!companyId) return;
@@ -150,6 +153,27 @@ export default function ReferralPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCsv(true);
+    try {
+      const result = await referralApi.uploadLeadsCsv(companyId, file, listName || undefined);
+      const { created, list_name: name, unrecognized_columns } = result.data;
+      let msg = `${created} leads imported${name ? ` as "${name}"` : ""}`;
+      if (unrecognized_columns?.length) msg += ` · ${unrecognized_columns.length} unrecognized column(s) skipped`;
+      showToast(msg);
+      setListName("");
+      const l = await referralApi.leads(companyId).catch(() => ({ data: { leads: [] } }));
+      setLeads((l.data as any).leads || (l.data as any).items || []);
+    } catch {
+      showToast("Upload failed — check CSV format and try again.");
+    } finally {
+      setUploadingCsv(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const loadDemoData = () => {
@@ -398,20 +422,41 @@ export default function ReferralPage() {
 
         {/* Leads Table */}
         <div className="card p-6">
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Provider Leads</h2>
               <p className="text-sm text-slate-500 mt-0.5">{leads.length} providers in database</p>
             </div>
-            <button
-              onClick={handleGenerateLeads}
-              disabled={generatingLeads}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-              style={{ background: "#10b981" }}
-            >
-              {generatingLeads ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Users className="w-3 h-3" />}
-              Auto-Generate from NPPES
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* CSV Upload with optional list name */}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={listName}
+                  onChange={(e) => setListName(e.target.value)}
+                  placeholder="List name (e.g. Pediatricians in Texas)"
+                  className="w-56 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingCsv}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                >
+                  {uploadingCsv ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                  Upload CSV
+                </button>
+                <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleCsvUpload} />
+              </div>
+              <button
+                onClick={handleGenerateLeads}
+                disabled={generatingLeads}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                style={{ background: "#10b981" }}
+              >
+                {generatingLeads ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Users className="w-3 h-3" />}
+                Auto-Generate from NPPES
+              </button>
+            </div>
           </div>
 
           {leads.length === 0 ? (
@@ -429,8 +474,12 @@ export default function ReferralPage() {
                   <Users className="w-4 h-4" />
                   Auto-Generate from NPPES
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">
-                  <Upload className="w-4 h-4" />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingCsv}
+                  className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {uploadingCsv ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                   Upload CSV
                 </button>
               </div>

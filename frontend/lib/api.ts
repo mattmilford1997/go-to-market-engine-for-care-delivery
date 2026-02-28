@@ -45,9 +45,10 @@ export const referralApi = {
     api.get(`/referral/${companyId}/leads`, { params: filters }),
   generateLeads: (companyId: string) =>
     api.post(`/referral/${companyId}/leads/generate`),
-  uploadLeadsCsv: (companyId: string, file: File) => {
+  uploadLeadsCsv: (companyId: string, file: File, listName?: string) => {
     const form = new FormData();
     form.append("file", file);
+    if (listName) form.append("list_name", listName);
     return api.post(`/referral/${companyId}/leads/upload`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     });

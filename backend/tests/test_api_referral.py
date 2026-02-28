@@ -85,7 +85,8 @@ class TestLeadOperations:
         assert resp.status_code == 200
         assert resp.json()["status"] == "generating"
 
-    def test_upload_leads_csv(self, client, created_company):
+    def test_upload_leads_csv_canonical_headers(self, client, created_company):
+        """Standard NPPES-style headers work as before."""
         csv_content = "npi,first_name,last_name,specialty,practice_name,fax,phone,email,address,city,state,zip\n"
         csv_content += "1112223333,Alice,Jones,Psychiatry,Jones Practice,602-111-2222,602-333-4444,alice@example.com,100 Main St,Phoenix,AZ,85001\n"
         csv_content += "2223334444,Bob,Brown,Family Medicine,Brown Clinic,480-111-2222,480-333-4444,bob@example.com,200 Oak Ave,Scottsdale,AZ,85251\n"
@@ -97,6 +98,99 @@ class TestLeadOperations:
         assert resp.status_code == 200
         data = resp.json()
         assert data["created"] == 2
+        assert data["errors"] == []
+        assert "column_mapping" in data
+        assert data["campaign_id"] is None  # no list_name provided
+
+    def test_upload_leads_csv_natural_language_headers(self, client, created_company):
+        """Fuzzy column mapping handles human-written header variations."""
+        csv_content = "NPI Number,First Name,Last Name,Credentials,Medical Specialty,Practice Name,Fax Number,Phone,Email Address,Street Address,City,State,Zip Code\n"
+        csv_content += "1112223333,Carol,Davis,MD,Neurology,Davis Neuro,602-111-0001,602-222-0001,carol@neuro.com,500 Oak St,Phoenix,AZ,85004\n"
+
+        resp = client.post(
+            f"/api/v1/referral/{created_company.id}/leads/upload",
+            files={"file": ("providers.csv", io.BytesIO(csv_content.encode()), "text/csv")},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 1
+        assert data["errors"] == []
+        # Verify columns were recognized
+        col_map = data["column_mapping"]
+        assert "First Name" in col_map and col_map["First Name"] == "first_name"
+        assert "NPI Number" in col_map and col_map["NPI Number"] == "npi"
+        assert "Fax Number" in col_map and col_map["Fax Number"] == "fax"
+        assert "Medical Specialty" in col_map and col_map["Medical Specialty"] == "specialty"
+        assert "Zip Code" in col_map and col_map["Zip Code"] == "zip"
+
+    def test_upload_csv_mixed_case_stripped_headers(self, client, created_company):
+        """Headers with spaces, mixed case, and extra punctuation are normalized."""
+        csv_content = "  fname ,  lname ,faxno,emailaddress,practicestate\n"
+        csv_content += "Jane,Smith,480-555-0001,jane@clinic.com,AZ\n"
+
+        resp = client.post(
+            f"/api/v1/referral/{created_company.id}/leads/upload",
+            files={"file": ("list.csv", io.BytesIO(csv_content.encode()), "text/csv")},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 1
+        col_map = data["column_mapping"]
+        assert "fname" in " ".join(col_map.values()) or "first_name" in col_map.values()
+
+    def test_upload_csv_with_unrecognized_columns(self, client, created_company):
+        """Unrecognized columns are reported but don't cause failures."""
+        csv_content = "first_name,last_name,fax,custom_field_xyz,another_unknown\n"
+        csv_content += "Tom,Ray,602-100-0001,value1,value2\n"
+
+        resp = client.post(
+            f"/api/v1/referral/{created_company.id}/leads/upload",
+            files={"file": ("list.csv", io.BytesIO(csv_content.encode()), "text/csv")},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 1
+        assert "custom_field_xyz" in data["unrecognized_columns"]
+        assert "another_unknown" in data["unrecognized_columns"]
+
+    def test_upload_csv_with_list_name_creates_campaign(self, client, created_company, db):
+        """Providing list_name creates a named Campaign and enrolls all leads."""
+        from app.models.referral import Campaign
+        csv_content = "first_name,last_name,specialty,fax\n"
+        csv_content += "Dana,Lee,Pediatrics,602-555-1001\n"
+        csv_content += "Eric,Wong,Family Medicine,602-555-1002\n"
+        csv_content += "Fiona,Black,LCSW,602-555-1003\n"
+
+        resp = client.post(
+            f"/api/v1/referral/{created_company.id}/leads/upload",
+            files={"file": ("list.csv", io.BytesIO(csv_content.encode()), "text/csv")},
+            data={"list_name": "Pediatricians in Texas"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 3
+        assert data["list_name"] == "Pediatricians in Texas"
+        assert data["campaign_id"] is not None
+
+        # Verify campaign was created in DB
+        campaign = db.query(Campaign).filter(
+            Campaign.id == data["campaign_id"]
+        ).first()
+        assert campaign is not None
+        assert campaign.name == "Pediatricians in Texas"
+        assert campaign.channel == "csv_upload"
+
+    def test_upload_csv_excel_bom_encoding(self, client, created_company):
+        """Excel-saved CSVs with UTF-8 BOM are handled correctly."""
+        csv_content = "\ufeffFirst Name,Last Name,fax\nGrace,Hopper,602-555-9999\n"
+
+        resp = client.post(
+            f"/api/v1/referral/{created_company.id}/leads/upload",
+            files={"file": ("excel_export.csv", io.BytesIO(csv_content.encode("utf-8-sig")), "text/csv")},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] == 1
         assert data["errors"] == []
 
     def test_update_lead_status(self, client, created_company, leads):
