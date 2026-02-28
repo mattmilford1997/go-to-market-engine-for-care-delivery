@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     # AI / LLM
     ANTHROPIC_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = None
+    GOOGLE_AI_API_KEY: Optional[str] = None
+    LLM_PROVIDER: str = "anthropic"          # anthropic | openai | gemini
     LLM_MODEL_BULK: str = "claude-sonnet-4-6"      # bulk generation
     LLM_MODEL_STRATEGY: str = "claude-opus-4-6"     # strategy tasks
 

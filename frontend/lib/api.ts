@@ -7,6 +7,15 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// LLM Provider Settings
+export const llmSettingsApi = {
+  providers: () => api.get("/llm-settings/providers"),
+  current: () => api.get("/llm-settings/current"),
+  setProvider: (provider: string, apiKey?: string) =>
+    api.put("/llm-settings/provider", { provider, api_key: apiKey }),
+  test: () => api.post("/llm-settings/test"),
+};
+
 // Companies
 export const companiesApi = {
   list: () => api.get("/companies/"),

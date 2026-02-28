@@ -1,40 +1,207 @@
 """
-LLM Service — wraps Anthropic Claude API.
-Coded against API spec; plug in ANTHROPIC_API_KEY via .env to activate.
+LLM Service — multi-provider wrapper supporting:
+  - Anthropic Claude (default)
+  - OpenAI ChatGPT
+  - Google Gemini
+
+Switch providers at runtime via PUT /api/v1/llm-settings/provider.
+All modules call `llm_service.client.messages.create(...)` and get back
+a normalized response with `.content[0].text` — regardless of provider.
 """
 import json
-from typing import Optional
-import anthropic
 from app.core.config import settings
 
 
+# ── Provider state (module-level, survives requests, reset on restart) ────────
+# Initialized from config; can be changed at runtime via the llm-settings API.
+_provider_state: dict = {
+    "provider": settings.LLM_PROVIDER or "anthropic",
+    "api_keys": {},   # runtime overrides (not persisted to disk)
+}
+
+PROVIDER_MODELS = {
+    "anthropic": {
+        "bulk":        "claude-sonnet-4-6",
+        "strategy":    "claude-opus-4-6",
+        "label":       "Claude (Anthropic)",
+        "description": "Best reasoning and healthcare domain knowledge",
+    },
+    "openai": {
+        "bulk":        "gpt-4o",
+        "strategy":    "gpt-4o",
+        "label":       "ChatGPT (OpenAI)",
+        "description": "Fast, capable, large ecosystem of integrations",
+    },
+    "gemini": {
+        "bulk":        "gemini-2.0-flash",
+        "strategy":    "gemini-1.5-pro",
+        "label":       "Gemini (Google)",
+        "description": "Strong structured-data and medical content generation",
+    },
+}
+
+
+# ── Normalized response objects ───────────────────────────────────────────────
+
+class _TextBlock:
+    __slots__ = ("text",)
+
+    def __init__(self, text: str):
+        self.text = text
+
+
+class _NormalizedResponse:
+    """Mimics Anthropic's Message so all module code works unchanged."""
+    __slots__ = ("content",)
+
+    def __init__(self, text: str):
+        self.content = [_TextBlock(text)]
+
+
+# ── Provider-agnostic messages proxy ─────────────────────────────────────────
+
+class _MessagesProxy:
+    """
+    Proxy for `llm_service.client.messages`.
+    `.create()` has the Anthropic signature and routes to the active provider.
+    """
+
+    def __init__(self, parent: "LLMService"):
+        self._parent = parent
+
+    def create(
+        self,
+        *,
+        model: str,
+        max_tokens: int,
+        messages: list,
+        system: str = "",
+        **kwargs,
+    ) -> _NormalizedResponse:
+        provider = _provider_state["provider"]
+        if provider == "openai":
+            return self._call_openai(max_tokens, messages, system)
+        if provider == "gemini":
+            return self._call_gemini(max_tokens, messages, system)
+        return self._call_anthropic(model, max_tokens, messages, system, **kwargs)
+
+    # ── Anthropic ─────────────────────────────────────────────────────────
+    def _call_anthropic(self, model, max_tokens, messages, system, **kwargs):
+        kw: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
+        if system:
+            kw["system"] = system
+        kw.update(kwargs)
+        return self._parent._anthropic_client.messages.create(**kw)
+
+    # ── OpenAI ────────────────────────────────────────────────────────────
+    def _call_openai(self, max_tokens, messages, system):
+        try:
+            from openai import OpenAI  # optional dependency
+        except ImportError:
+            raise RuntimeError("openai package not installed — pip install openai")
+
+        api_key = (
+            _provider_state["api_keys"].get("openai")
+            or settings.OPENAI_API_KEY
+            or ""
+        )
+        client = OpenAI(api_key=api_key)
+        oai_msgs = []
+        if system:
+            oai_msgs.append({"role": "system", "content": system})
+        oai_msgs.extend(messages)
+        resp = client.chat.completions.create(
+            model=PROVIDER_MODELS["openai"]["bulk"],
+            max_tokens=max_tokens,
+            messages=oai_msgs,
+        )
+        return _NormalizedResponse(resp.choices[0].message.content or "")
+
+    # ── Google Gemini ─────────────────────────────────────────────────────
+    def _call_gemini(self, max_tokens, messages, system):
+        try:
+            import google.generativeai as genai  # optional dependency
+        except ImportError:
+            raise RuntimeError(
+                "google-generativeai not installed — pip install google-generativeai"
+            )
+
+        api_key = (
+            _provider_state["api_keys"].get("gemini")
+            or settings.GOOGLE_AI_API_KEY
+            or ""
+        )
+        genai.configure(api_key=api_key)
+        gm = genai.GenerativeModel(PROVIDER_MODELS["gemini"]["bulk"])
+
+        parts = []
+        if system:
+            parts.append(f"[System]: {system}\n")
+        for m in messages:
+            parts.append(f"[{m.get('role', 'user').capitalize()}]: {m['content']}")
+        resp = gm.generate_content(
+            "\n".join(parts),
+            generation_config={"max_output_tokens": max_tokens},
+        )
+        return _NormalizedResponse(resp.text or "")
+
+
+# ── Client proxy ──────────────────────────────────────────────────────────────
+
+class _ClientProxy:
+    """Mimics the `anthropic.Anthropic()` client surface used by all modules."""
+
+    def __init__(self, parent: "LLMService"):
+        self.messages = _MessagesProxy(parent)
+
+
+# ── Main LLM Service ──────────────────────────────────────────────────────────
+
 class LLMService:
     def __init__(self):
-        self.client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY or "placeholder")
-        self.bulk_model = settings.LLM_MODEL_BULK
-        self.strategy_model = settings.LLM_MODEL_STRATEGY
+        import anthropic
+        self._anthropic_client = anthropic.Anthropic(
+            api_key=settings.ANTHROPIC_API_KEY or "placeholder"
+        )
+        # Proxy client — all modules use `llm_service.client.messages.create(...)`
+        self.client = _ClientProxy(self)
 
+    # ── Model helpers ──────────────────────────────────────────────────────
+    @property
+    def model_bulk(self) -> str:
+        return PROVIDER_MODELS[_provider_state["provider"]]["bulk"]
+
+    @property
+    def bulk_model(self) -> str:           # legacy alias
+        return self.model_bulk
+
+    @property
+    def model_strategy(self) -> str:
+        return PROVIDER_MODELS[_provider_state["provider"]]["strategy"]
+
+    @property
+    def strategy_model(self) -> str:       # legacy alias
+        return self.model_strategy
+
+    # ── Low-level helpers ─────────────────────────────────────────────────
     def _chat(self, prompt: str, system: str = "", use_strategy: bool = False, max_tokens: int = 4096) -> str:
-        model = self.strategy_model if use_strategy else self.bulk_model
-        messages = [{"role": "user", "content": prompt}]
-        kwargs = {"model": model, "max_tokens": max_tokens, "messages": messages}
-        if system:
-            kwargs["system"] = system
-        response = self.client.messages.create(**kwargs)
-        return response.content[0].text
+        model = self.model_strategy if use_strategy else self.model_bulk
+        return self.client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            system=system,
+        ).content[0].text
 
     def _chat_json(self, prompt: str, system: str = "", use_strategy: bool = False) -> dict | list:
         raw = self._chat(prompt, system=system, use_strategy=use_strategy)
-        # Strip markdown code fences if present
         cleaned = raw.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1]
             cleaned = cleaned.rsplit("```", 1)[0]
         return json.loads(cleaned)
 
-    # ------------------------------------------------------------------ #
-    # Company Ingestion
-    # ------------------------------------------------------------------ #
+    # ── Company Ingestion ──────────────────────────────────────────────────
 
     def extract_company_data(self, raw_html: str, url: str) -> dict:
         system = (
@@ -50,32 +217,18 @@ HTML content (truncated to 30k chars):
 Return a JSON object with these exact keys:
 {{
   "company_name": "string",
-  "specialty_niche": "string — e.g. 'TMS therapy, ketamine infusions, psychiatric medication management'",
-  "services": [
-    {{"name": "...", "description": "...", "conditions_treated": ["..."], "duration": "...", "cost_range": "..."}}
-  ],
-  "providers": [
-    {{"name": "...", "title": "...", "credentials": "...", "bio": "...", "specialties": ["..."]}}
-  ],
-  "locations": [
-    {{"name": "...", "address": "...", "city": "...", "state": "...", "zip": "...", "phone": "...", "hours": "..."}}
-  ],
+  "specialty_niche": "string",
+  "services": [{{"name": "...", "description": "...", "conditions_treated": ["..."], "duration": "...", "cost_range": "..."}}],
+  "providers": [{{"name": "...", "title": "...", "credentials": "...", "bio": "...", "specialties": ["..."]}}],
+  "locations": [{{"name": "...", "address": "...", "city": "...", "state": "...", "zip": "...", "phone": "...", "hours": "..."}}],
   "insurance_accepted": ["string"],
   "differentiators": ["string"],
   "target_demographics": ["string"],
-  "brand_guidelines": {{
-    "tone": "e.g. warm and clinical",
-    "key_phrases": ["..."],
-    "primary_color": "hex if inferable",
-    "fonts": {{"heading": "...", "body": "..."}},
-    "imagery_style": "..."
-  }}
+  "brand_guidelines": {{"tone": "...", "key_phrases": ["..."], "primary_color": "hex", "fonts": {{"heading": "...", "body": "..."}}, "imagery_style": "..."}}
 }}"""
         return self._chat_json(prompt, system=system)
 
-    # ------------------------------------------------------------------ #
-    # Module 1: Paid Ads
-    # ------------------------------------------------------------------ #
+    # ── Module 1: Paid Ads ─────────────────────────────────────────────────
 
     def generate_google_ad_copy(self, company_data: dict, keyword_cluster: dict) -> dict:
         system = "You are a Google Ads specialist for healthcare. Return ONLY valid JSON."
@@ -87,21 +240,15 @@ Services: {json.dumps(company_data.get('services', [])[:5])}
 Insurance: {', '.join(company_data.get('insurance_accepted', [])[:10])}
 Differentiators: {', '.join(company_data.get('differentiators', [])[:5])}
 Locations: {json.dumps(company_data.get('locations', [])[:3])}
-
 Keyword cluster: {json.dumps(keyword_cluster)}
 
 Return JSON:
 {{
-  "headlines": ["array of exactly 15 headlines, max 30 chars each"],
-  "descriptions": ["array of exactly 4 descriptions, max 90 chars each"],
-  "sitelinks": [
-    {{"text": "...", "description1": "...", "description2": "...", "url_path": "..."}}
-  ],
-  "callouts": ["array of 6-10 callout extensions, max 25 chars each"],
-  "structured_snippets": {{
-    "header": "Services",
-    "values": ["..."]
-  }}
+  "headlines": ["15 headlines, max 30 chars each"],
+  "descriptions": ["4 descriptions, max 90 chars each"],
+  "sitelinks": [{{"text": "...", "description1": "...", "description2": "...", "url_path": "..."}}],
+  "callouts": ["6-10 callout extensions, max 25 chars each"],
+  "structured_snippets": {{"header": "Services", "values": ["..."]}}
 }}"""
         return self._chat_json(prompt, system=system)
 
@@ -115,27 +262,13 @@ Services: {json.dumps(company_data.get('services', [])[:10])}
 Locations: {json.dumps(company_data.get('locations', [])[:5])}
 Insurance: {', '.join(company_data.get('insurance_accepted', [])[:10])}
 
-Generate keyword clusters. Each cluster represents one ad group.
-
-Return array of objects:
-[
-  {{
-    "cluster_name": "TMS Therapy - Local",
-    "match_type": "phrase",
-    "keywords": ["tms therapy near me", "tms treatment depression {{city}}", "..."],
-    "negative_keywords": ["..."],
-    "intent": "high — treatment-seeking",
-    "estimated_volume": "medium",
-    "service": "TMS Therapy"
-  }}
-]
-
-Generate 8-12 clusters covering all major services and location variations."""
+Return array of 8-12 keyword cluster objects:
+[{{"cluster_name": "...", "match_type": "phrase", "keywords": ["..."], "negative_keywords": ["..."], "intent": "...", "estimated_volume": "medium", "service": "..."}}]"""
         return self._chat_json(prompt, system=system)
 
     def generate_meta_ad_copy(self, company_data: dict, target_audience: dict) -> dict:
         system = "You are a Meta Ads specialist for healthcare. Return ONLY valid JSON."
-        prompt = f"""Generate Meta (Facebook/Instagram) ad copy for this healthcare company.
+        prompt = f"""Generate Meta (Facebook/Instagram) ad copy.
 
 Company: {company_data['company_name']}
 Specialty: {company_data.get('specialty_niche', '')}
@@ -144,296 +277,118 @@ Brand tone: {company_data.get('brand_guidelines', {}).get('tone', 'warm and clin
 
 Return JSON:
 {{
-  "primary_text": "Primary ad text (125 chars max for feed)",
-  "headline": "Headline (40 chars max)",
-  "description": "Description (30 chars max)",
-  "cta": "LEARN_MORE | CONTACT_US | GET_QUOTE | BOOK_TRAVEL",
-  "image_concept": "Detailed description of ideal image/creative for this ad",
-  "placement_variants": {{
-    "feed": {{"primary_text": "...", "headline": "..."}},
-    "stories": {{"text_overlay": "...", "cta_label": "..."}},
-    "reels": {{"hook": "...", "body": "...", "cta": "..."}}
-  }}
+  "primary_text": "125 chars max",
+  "headline": "40 chars max",
+  "description": "30 chars max",
+  "cta": "LEARN_MORE|CONTACT_US|GET_QUOTE",
+  "image_concept": "...",
+  "placement_variants": {{"feed": {{"primary_text": "...", "headline": "..."}}, "stories": {{"text_overlay": "...", "cta_label": "..."}}, "reels": {{"hook": "...", "body": "...", "cta": "..."}}}}
 }}"""
         return self._chat_json(prompt, system=system)
 
-    # ------------------------------------------------------------------ #
-    # Module 2: Referral Marketing
-    # ------------------------------------------------------------------ #
+    # ── Module 2: Referral Marketing ───────────────────────────────────────
 
     def generate_fax_sheet_content(self, company_data: dict, target_specialty: str) -> dict:
         system = "You are a healthcare referral marketing specialist. Return ONLY valid JSON."
-        prompt = f"""Generate a professional referral fax sheet for a healthcare practice targeting {target_specialty} providers.
+        prompt = f"""Generate a referral fax sheet for {company_data['company_name']} targeting {target_specialty}.
 
-Company: {company_data['company_name']}
-Specialty: {company_data.get('specialty_niche', '')}
 Services: {json.dumps(company_data.get('services', [])[:5])}
 Insurance: {', '.join(company_data.get('insurance_accepted', [])[:15])}
 Differentiators: {', '.join(company_data.get('differentiators', [])[:5])}
 Locations: {json.dumps(company_data.get('locations', [])[:3])}
-Providers: {json.dumps([{{'name': p.get('name'), 'credentials': p.get('credentials')}} for p in company_data.get('providers', [])[:5]])}
 
 Return JSON:
 {{
-  "headline": "...",
-  "tagline": "...",
-  "intro_paragraph": "...",
-  "key_services_for_this_specialty": ["..."],
-  "why_refer_points": ["..."],
-  "insurance_section": "...",
-  "intake_process": "...",
-  "availability_note": "...",
-  "fax_back_form": {{
-    "title": "Referral Request",
-    "fields": ["Patient Name", "DOB", "Referring Provider", "Reason for Referral", "Urgency", "Best Contact"]
-  }},
-  "footer_cta": "...",
-  "opt_out_text": "To stop receiving faxes from us, fax REMOVE to [FAX NUMBER] or call [PHONE]"
+  "headline": "...", "tagline": "...", "intro_paragraph": "...",
+  "key_services_for_this_specialty": ["..."], "why_refer_points": ["..."],
+  "insurance_section": "...", "intake_process": "...", "availability_note": "...",
+  "fax_back_form": {{"title": "Referral Request", "fields": ["Patient Name", "DOB", "Referring Provider", "Reason for Referral", "Urgency", "Best Contact"]}},
+  "footer_cta": "...", "opt_out_text": "To stop receiving faxes, fax REMOVE to [FAX NUMBER]"
 }}"""
         return self._chat_json(prompt, system=system)
 
     def generate_voicemail_scripts(self, company_data: dict, target_specialty: str) -> list:
         system = "You are a healthcare marketing copywriter. Return ONLY valid JSON."
-        prompt = f"""Generate 3 ringless voicemail scripts for physician referral outreach.
+        prompt = f"""Generate 3 ringless voicemail scripts for {company_data['company_name']} targeting {target_specialty}.
 
-Company: {company_data['company_name']}
-Target: {target_specialty} providers
-Services: {company_data.get('specialty_niche', '')}
-Tone: {company_data.get('brand_guidelines', {}).get('tone', 'warm and professional')}
+Requirements: 30-45s (75-115 words), introduce practice, highlight service, mention insurance, include opt-out.
 
-Requirements:
-- 30-45 seconds when read aloud (roughly 75-115 words)
-- Introduce the practice
-- Highlight one service relevant to {target_specialty}
-- Mention insurance acceptance
-- Provide callback number placeholder [PHONE]
-- Include opt-out: "To opt out of future messages, please press 9 or call us"
-
-Return array of 3 script variants:
-[
-  {{
-    "variant": 1,
-    "focus": "...",
-    "script": "Hi, this is [PROVIDER NAME] from [COMPANY NAME]...",
-    "word_count": 90,
-    "estimated_duration_seconds": 35
-  }}
-]"""
+Return: [{{"variant": 1, "focus": "...", "script": "Hi, this is...", "word_count": 90, "estimated_duration_seconds": 35}}]"""
         return self._chat_json(prompt, system=system)
 
     def generate_email_sequence(self, company_data: dict, target_specialty: str) -> list:
         system = "You are a healthcare B2B email marketing specialist. Return ONLY valid JSON."
-        prompt = f"""Generate a 7-email referral outreach sequence for physician-to-physician marketing.
+        prompt = f"""Generate a 7-email referral sequence for {company_data['company_name']} targeting {target_specialty}.
 
-Company: {company_data['company_name']}
-Target: {target_specialty} providers
-Services: {company_data.get('specialty_niche', '')}
-Insurance: {', '.join(company_data.get('insurance_accepted', [])[:10])}
-Differentiators: {', '.join(company_data.get('differentiators', [])[:5])}
+Spans 28 days. Include CAN-SPAM footer and placeholders {{PROVIDER_FIRST_NAME}}, {{PRACTICE_NAME}}, {{CITY}}.
 
-Sequence spans 28 days. Must include:
-- CAN-SPAM compliant footer with physical address + unsubscribe link
-- Personalization placeholders: {{PROVIDER_FIRST_NAME}}, {{PRACTICE_NAME}}, {{CITY}}
-
-Return array of 7 emails:
-[
-  {{
-    "step": 1,
-    "day": 1,
-    "subject": "...",
-    "preview_text": "...",
-    "body": "Full email body with placeholders...",
-    "cta": "...",
-    "focus": "introduction"
-  }}
-]"""
+Return: [{{"step": 1, "day": 1, "subject": "...", "preview_text": "...", "body": "...", "cta": "...", "focus": "introduction"}}]"""
         return self._chat_json(prompt, system=system)
 
     def generate_postcard_copy(self, company_data: dict) -> dict:
         system = "You are a direct mail healthcare marketing specialist. Return ONLY valid JSON."
-        prompt = f"""Generate copy for a 6x9 referral marketing postcard for {company_data['company_name']}.
+        prompt = f"""Generate a 6x9 referral postcard for {company_data['company_name']}.
 
 Specialty: {company_data.get('specialty_niche', '')}
 Services: {json.dumps(company_data.get('services', [])[:5])}
 Insurance: {', '.join(company_data.get('insurance_accepted', [])[:10])}
-Differentiators: {', '.join(company_data.get('differentiators', [])[:3])}
 
-Return JSON:
-{{
-  "front": {{
-    "headline": "...",
-    "subheadline": "...",
-    "key_points": ["3-4 bullet points max"],
-    "cta_text": "...",
-    "cta_url_placeholder": "[QR_CODE_URL]"
-  }},
-  "back": {{
-    "headline": "...",
-    "body": "...",
-    "services_list": ["..."],
-    "insurance_note": "...",
-    "contact_info_placeholder": "[PRACTICE_INFO]",
-    "return_address_placeholder": "[RETURN_ADDRESS]"
-  }},
-  "design_notes": "Brief notes for designer on layout, colors, imagery"
-}}"""
+Return JSON: {{"front": {{"headline": "...", "subheadline": "...", "key_points": ["..."], "cta_text": "...", "cta_url_placeholder": "[QR_CODE_URL]"}}, "back": {{"headline": "...", "body": "...", "services_list": ["..."], "insurance_note": "...", "contact_info_placeholder": "[PRACTICE_INFO]", "return_address_placeholder": "[RETURN_ADDRESS]"}}, "design_notes": "..."}}"""
         return self._chat_json(prompt, system=system)
 
-    # ------------------------------------------------------------------ #
-    # Module 3: Content
-    # ------------------------------------------------------------------ #
+    # ── Module 3: Content ──────────────────────────────────────────────────
 
     def generate_blog_post(self, company_data: dict, keyword: str, target_word_count: int = 1500) -> dict:
         system = "You are a healthcare content writer and SEO specialist. Return ONLY valid JSON."
-        prompt = f"""Write a {target_word_count}-word SEO-optimized blog post for a healthcare practice.
-
-Company: {company_data['company_name']}
-Specialty: {company_data.get('specialty_niche', '')}
+        prompt = f"""Write a {target_word_count}-word SEO blog post for {company_data['company_name']}.
 Target keyword: {keyword}
 Brand tone: {company_data.get('brand_guidelines', {}).get('tone', 'warm and clinical')}
-Services: {json.dumps(company_data.get('services', [])[:5])}
 
-Requirements:
-- Medically accurate (cite general evidence, no fake statistics)
-- H1, H2s, H3s for structure
-- FAQ section at end (5 questions)
-- Meta description (155 chars max)
-- Target keyword in H1, first paragraph, 2-3 H2s naturally
-- Patient-friendly CTA at end
-- Schema markup hints in metadata
-
-Return JSON:
-{{
-  "title": "H1 title with target keyword",
-  "meta_description": "...",
-  "slug": "url-friendly-slug",
-  "target_keyword": "{keyword}",
-  "secondary_keywords": ["..."],
-  "body_markdown": "Full post in markdown with headers...",
-  "faq_schema": [
-    {{"question": "...", "answer": "..."}}
-  ],
-  "estimated_word_count": {target_word_count},
-  "internal_link_suggestions": ["..."],
-  "image_alt_text_suggestions": ["..."]
-}}"""
+Return JSON: {{"title": "...", "meta_description": "...", "slug": "...", "target_keyword": "{keyword}", "secondary_keywords": ["..."], "body_markdown": "...", "faq_schema": [{{"question": "...", "answer": "..."}}], "estimated_word_count": {target_word_count}, "internal_link_suggestions": ["..."], "image_alt_text_suggestions": ["..."]}}"""
         return self._chat_json(prompt, system=system, use_strategy=False)
 
     def generate_social_posts(self, company_data: dict, content_type: str, count: int = 5) -> list:
         system = "You are a healthcare social media manager. Return ONLY valid JSON."
-        prompt = f"""Generate {count} {content_type} social media posts for a healthcare practice.
-
-Company: {company_data['company_name']}
-Specialty: {company_data.get('specialty_niche', '')}
+        prompt = f"""Generate {count} {content_type} posts for {company_data['company_name']}.
 Brand tone: {company_data.get('brand_guidelines', {}).get('tone', 'warm, clinical, empathetic')}
 Services: {', '.join([s.get('name', '') for s in company_data.get('services', [])[:5]])}
+HIPAA: No patient identifiers. No guaranteed outcome claims.
 
-Content types to mix: educational, awareness, provider spotlight, treatment explainer, community.
-Include: condition awareness, destigmatization messaging, treatment-seeking encouragement.
-HIPAA: No patient identifiers. No claims about guaranteed outcomes.
-
-Return array of {count} post objects:
-[
-  {{
-    "type": "educational | awareness | provider_spotlight | treatment_explainer | community",
-    "caption": "Full post text with natural paragraph breaks",
-    "hashtags": ["healthcare", "mentalhealth", "..."],
-    "image_concept": "Description of ideal image/graphic",
-    "best_days": ["Tuesday", "Thursday"],
-    "best_times": ["7AM", "12PM"]
-  }}
-]"""
+Return [{{"type": "...", "caption": "...", "hashtags": ["..."], "image_concept": "...", "best_days": ["Tuesday"], "best_times": ["7AM"]}}]"""
         return self._chat_json(prompt, system=system)
 
     def generate_content_calendar(self, company_data: dict, weeks: int = 12) -> dict:
         system = "You are a healthcare content strategist. Return ONLY valid JSON."
-        prompt = f"""Create a {weeks}-week content calendar for a healthcare practice.
-
-Company: {company_data['company_name']}
-Specialty: {company_data.get('specialty_niche', '')}
+        prompt = f"""Create a {weeks}-week content calendar for {company_data['company_name']}.
 Services: {', '.join([s.get('name', '') for s in company_data.get('services', [])[:10]])}
 
-Return JSON:
-{{
-  "strategy_overview": "...",
-  "content_pillars": ["..."],
-  "weeks": [
-    {{
-      "week": 1,
-      "theme": "...",
-      "blog_topics": [{{"title": "...", "target_keyword": "...", "word_count": 1500}}],
-      "social_themes": [{{"platform": "facebook|instagram|linkedin", "theme": "...", "post_ideas": ["..."]}}]
-    }}
-  ]
-}}"""
+Return: {{"strategy_overview": "...", "content_pillars": ["..."], "weeks": [{{"week": 1, "theme": "...", "blog_topics": [{{"title": "...", "target_keyword": "...", "word_count": 1500}}], "social_themes": [{{"platform": "facebook", "theme": "...", "post_ideas": ["..."]}}]}}]}}"""
         return self._chat_json(prompt, system=system, use_strategy=True)
 
-    # ------------------------------------------------------------------ #
-    # Module 4: SEO
-    # ------------------------------------------------------------------ #
+    # ── Module 4: SEO ──────────────────────────────────────────────────────
 
     def analyze_seo_data(self, company_data: dict, gsc_data: dict, crawl_results: dict) -> dict:
         system = "You are a technical SEO specialist for healthcare. Return ONLY valid JSON."
-        prompt = f"""Analyze this healthcare website's SEO data and provide actionable recommendations.
+        prompt = f"""Analyze SEO data for {company_data['company_name']} ({company_data.get('website_url', '')}).
 
-Company: {company_data['company_name']}
-Website: {company_data.get('website_url', '')}
-Specialty: {company_data.get('specialty_niche', '')}
-Locations: {json.dumps(company_data.get('locations', [])[:3])}
-
-Google Search Console data: {json.dumps(gsc_data)[:5000]}
+GSC data: {json.dumps(gsc_data)[:5000]}
 Crawl results: {json.dumps(crawl_results)[:5000]}
 
-Return JSON:
-{{
-  "summary": "...",
-  "quick_wins": [{{"action": "...", "priority": "high", "expected_impact": "...", "effort": "low"}}],
-  "technical_fixes": [{{"issue": "...", "affected_pages": [], "fix": "...", "priority": "high|medium|low"}}],
-  "content_opportunities": [{{"keyword": "...", "intent": "...", "recommended_format": "..."}}],
-  "local_seo_actions": [{{"action": "...", "priority": "..."}}],
-  "schema_recommendations": [{{"schema_type": "...", "page": "...", "impact": "..."}}],
-  "30_day_action_plan": [{{"week": 1, "actions": ["..."]}}]
-}}"""
+Return: {{"summary": "...", "quick_wins": [{{"action": "...", "priority": "high", "expected_impact": "...", "effort": "low"}}], "technical_fixes": [{{"issue": "...", "affected_pages": [], "fix": "...", "priority": "high"}}], "content_opportunities": [{{"keyword": "...", "intent": "...", "recommended_format": "..."}}], "local_seo_actions": [{{"action": "...", "priority": "..."}}], "schema_recommendations": [{{"schema_type": "...", "page": "...", "impact": "..."}}], "30_day_action_plan": [{{"week": 1, "actions": ["..."]}}]}}"""
         return self._chat_json(prompt, system=system, use_strategy=True)
 
-    # ------------------------------------------------------------------ #
-    # Module 5: Directory Profiles
-    # ------------------------------------------------------------------ #
+    # ── Module 5: Directory Profiles ───────────────────────────────────────
 
     def generate_directory_profiles(self, company_data: dict, platform: str) -> dict:
         system = "You are a healthcare directory profile optimization specialist. Return ONLY valid JSON."
-        prompt = f"""Generate optimized directory profile content for {platform} for this healthcare practice.
+        prompt = f"""Generate optimized {platform} directory profile for {company_data['company_name']}.
 
-Company: {company_data['company_name']}
-Specialty: {company_data.get('specialty_niche', '')}
 Services: {json.dumps(company_data.get('services', [])[:8])}
 Insurance: {', '.join(company_data.get('insurance_accepted', [])[:20])}
 Providers: {json.dumps(company_data.get('providers', [])[:5])}
 Locations: {json.dumps(company_data.get('locations', [])[:3])}
-Differentiators: {', '.join(company_data.get('differentiators', [])[:5])}
-Platform: {platform}
 
-Return JSON:
-{{
-  "practice_description_50": "50-word description",
-  "practice_description_150": "150-word description",
-  "practice_description_500": "500-word description optimized for {platform}'s algorithm",
-  "provider_bios": [
-    {{
-      "provider_name": "...",
-      "bio_first_person": "...",
-      "bio_third_person": "...",
-      "specialties": ["..."],
-      "conditions_treated": ["..."],
-      "treatment_approaches": ["..."]
-    }}
-  ],
-  "services": ["..."],
-  "conditions": ["..."],
-  "insurance": ["..."],
-  "faq": [{{"question": "...", "answer": "..."}}],
-  "platform_specific_tags": ["..."]
-}}"""
+Return: {{"practice_description_50": "...", "practice_description_150": "...", "practice_description_500": "...", "provider_bios": [{{"provider_name": "...", "bio_first_person": "...", "bio_third_person": "...", "specialties": ["..."], "conditions_treated": ["..."], "treatment_approaches": ["..."]}}], "services": ["..."], "conditions": ["..."], "insurance": ["..."], "faq": [{{"question": "...", "answer": "..."}}], "platform_specific_tags": ["..."]}}"""
         return self._chat_json(prompt, system=system)
 
 

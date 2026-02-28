@@ -20,6 +20,7 @@ from app.api.modules.aeo import router as aeo_router
 from app.api.modules.video import router as video_router
 from app.api.modules.demo import router as demo_router
 from app.api.modules.spam import router as spam_router
+from app.api.modules.llm_settings import router as llm_settings_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -57,6 +58,7 @@ app.include_router(aeo_router, prefix=PREFIX)
 app.include_router(video_router, prefix=PREFIX)
 app.include_router(demo_router, prefix=PREFIX)
 app.include_router(spam_router, prefix=PREFIX)
+app.include_router(llm_settings_router, prefix=PREFIX)
 
 
 @app.get("/health")
