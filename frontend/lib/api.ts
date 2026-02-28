@@ -259,6 +259,17 @@ export const spamApi = {
     api.get(`/spam/${companyId}/compliance-report`),
 };
 
+// Costs
+export const costsApi = {
+  summary: (companyId: string) => api.get(`/costs/${companyId}/summary`),
+  history: (companyId: string, view?: string, periods?: number) =>
+    api.get(`/costs/${companyId}/history`, { params: { view, periods } }),
+  byCampaign: (companyId: string) => api.get(`/costs/${companyId}/by-campaign`),
+  estimate: (companyId: string, data: Record<string, unknown>) =>
+    api.post(`/costs/${companyId}/estimate`, data),
+  rates: () => api.get("/costs/cost-rates"),
+};
+
 // Demo data seeding
 export const demoApi = {
   loadAll: (companyId: string) => api.post(`/demo/${companyId}/load-all`),

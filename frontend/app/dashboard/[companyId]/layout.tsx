@@ -1,7 +1,7 @@
 "use client";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { companiesApi, approvalApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -11,8 +11,10 @@ const NAV = [
   { href: "/campaigns", label: "Campaigns", icon: "📊" },
   { href: "/leads", label: "Leads", icon: "👥" },
   { href: "/budget", label: "Budget", icon: "💰" },
+  { href: "/costs", label: "Costs", icon: "💳" },
   { href: "/library", label: "Materials", icon: "📁" },
   { href: "/schedule", label: "Calendar", icon: "📅" },
+  { href: "/setup", label: "Setup Guide", icon: "🔑" },
   { href: "/settings", label: "Settings & Credentials", icon: "⚙" },
 ];
 
@@ -41,14 +43,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { companyId } = useParams<{ companyId: string }>();
   const pathname = usePathname();
   const router = useRouter();
-  const [company, setCompany] = useState<any>(null);
-  const [pendingCount, setPendingCount] = useState(0);
 
-  useEffect(() => {
-    if (!companyId) return;
-    companiesApi.get(companyId).then((r) => setCompany(r.data)).catch(() => {});
-    approvalApi.count(companyId).then((r) => setPendingCount(r.data.pending)).catch(() => {});
-  }, [companyId]);
+  const { data: company } = useQuery({
+    queryKey: ["company", companyId],
+    queryFn: () => companiesApi.get(companyId).then((r) => r.data),
+    enabled: !!companyId,
+  });
+
+  const { data: approvalData } = useQuery({
+    queryKey: ["approval-count", companyId],
+    queryFn: () => approvalApi.count(companyId).then((r) => r.data),
+    enabled: !!companyId,
+    staleTime: 60_000, // re-check approval count every 1 min
+  });
+  const pendingCount = approvalData?.pending ?? 0;
 
   const base = `/dashboard/${companyId}`;
 
