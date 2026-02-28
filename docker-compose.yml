@@ -81,6 +81,9 @@ services:
     command: celery -A app.workers.celery_app worker --loglevel=info
 
   # Next.js frontend (dev)
+  # NEXT_PUBLIC_API_URL uses your HOST machine's port 8000, not the container name,
+  # because this value is embedded into browser JS and executed client-side.
+  # Change to your public domain when deploying (e.g. https://api.yourdomain.com/api/v1).
   frontend:
     build:
       context: ./frontend
