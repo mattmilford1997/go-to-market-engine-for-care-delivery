@@ -138,3 +138,80 @@ export const profilesApi = {
       password,
     }),
 };
+
+// ROI
+export const roiApi = {
+  summary: (companyId: string) => api.get(`/roi/${companyId}/summary`),
+  byChannel: (companyId: string) => api.get(`/roi/${companyId}/by-channel`),
+  attribution: (companyId: string) => api.get(`/roi/${companyId}/attribution`),
+  recommendations: (companyId: string) =>
+    api.post(`/roi/${companyId}/recommendations`),
+};
+
+// Competitors
+export const competitorsApi = {
+  list: (companyId: string) => api.get(`/competitors/${companyId}/`),
+  add: (companyId: string, data: Record<string, string>) =>
+    api.post(`/competitors/${companyId}/`, data),
+  remove: (companyId: string, id: string) =>
+    api.delete(`/competitors/${companyId}/${id}`),
+  analyze: (companyId: string, id: string) =>
+    api.post(`/competitors/${companyId}/${id}/analyze`),
+  summary: (companyId: string) =>
+    api.post(`/competitors/${companyId}/summary`),
+};
+
+// Reputation
+export const reputationApi = {
+  reviews: (companyId: string) =>
+    api.get(`/reputation/${companyId}/reviews`),
+  summary: (companyId: string) =>
+    api.get(`/reputation/${companyId}/summary`),
+  suggestResponse: (companyId: string, reviewId: string) =>
+    api.post(`/reputation/${companyId}/reviews/${reviewId}/suggest-response`),
+  analyzeSentiment: (companyId: string) =>
+    api.post(`/reputation/${companyId}/analyze-sentiment`),
+};
+
+// Reports
+export const reportsApi = {
+  weekly: (companyId: string) => api.get(`/reports/${companyId}/weekly`),
+  generate: (companyId: string) =>
+    api.post(`/reports/${companyId}/generate`),
+  history: (companyId: string) => api.get(`/reports/${companyId}/history`),
+};
+
+// Templates
+export const templatesApi = {
+  library: () => api.get("/templates/library"),
+  getTemplate: (id: string) => api.get(`/templates/library/${id}`),
+  deploy: (companyId: string, templateId: string) =>
+    api.post(`/templates/${companyId}/deploy/${templateId}`),
+};
+
+// Schedule
+export const scheduleApi = {
+  events: (companyId: string, month?: number, year?: number) =>
+    api.get(`/schedule/${companyId}/events`, { params: { month, year } }),
+  createEvent: (companyId: string, data: Record<string, unknown>) =>
+    api.post(`/schedule/${companyId}/events`, data),
+};
+
+// Intake
+export const intakeApi = {
+  forms: (companyId: string) => api.get(`/intake/${companyId}/forms`),
+  createForm: (companyId: string, data: Record<string, unknown>) =>
+    api.post(`/intake/${companyId}/forms`, data),
+  getForm: (companyId: string, formId: string) =>
+    api.get(`/intake/${companyId}/forms/${formId}`),
+  fieldTemplates: () => api.get("/intake/field-templates"),
+};
+
+// Chat
+export const chatApi = {
+  history: (companyId: string) => api.get(`/chat/${companyId}/history`),
+  message: (companyId: string, message: string) =>
+    api.post(`/chat/${companyId}/message`, { message }),
+  clearHistory: (companyId: string) =>
+    api.delete(`/chat/${companyId}/history`),
+};

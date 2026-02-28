@@ -12,6 +12,7 @@ const NAV = [
   { href: "/leads", label: "Leads", icon: "👥" },
   { href: "/budget", label: "Budget", icon: "💰" },
   { href: "/library", label: "Materials", icon: "📁" },
+  { href: "/schedule", label: "Calendar", icon: "📅" },
   { href: "/settings", label: "Settings & Credentials", icon: "⚙" },
 ];
 
@@ -21,6 +22,16 @@ const MODULES = [
   { href: "/content", label: "Content", color: "text-violet-400 hover:text-violet-300", bg: "hover:bg-violet-500/10", dot: "bg-violet-400" },
   { href: "/seo", label: "SEO", color: "text-sky-400 hover:text-sky-300", bg: "hover:bg-sky-500/10", dot: "bg-sky-400" },
   { href: "/profiles", label: "Profiles", color: "text-pink-400 hover:text-pink-300", bg: "hover:bg-pink-500/10", dot: "bg-pink-400" },
+];
+
+const INTELLIGENCE = [
+  { href: "/roi", label: "ROI Analytics", color: "text-amber-400 hover:text-amber-300", bg: "hover:bg-amber-500/10", dot: "bg-amber-400" },
+  { href: "/competitors", label: "Competitors", color: "text-red-400 hover:text-red-300", bg: "hover:bg-red-500/10", dot: "bg-red-400" },
+  { href: "/reputation", label: "Reputation", color: "text-pink-400 hover:text-pink-300", bg: "hover:bg-pink-500/10", dot: "bg-pink-400" },
+  { href: "/reports", label: "GTM Digest", color: "text-indigo-400 hover:text-indigo-300", bg: "hover:bg-indigo-500/10", dot: "bg-indigo-400" },
+  { href: "/templates", label: "Templates", color: "text-violet-400 hover:text-violet-300", bg: "hover:bg-violet-500/10", dot: "bg-violet-400" },
+  { href: "/intake", label: "Intake Forms", color: "text-teal-400 hover:text-teal-300", bg: "hover:bg-teal-500/10", dot: "bg-teal-400" },
+  { href: "/ask", label: "AI Strategy Chat", color: "text-sky-400 hover:text-sky-300", bg: "hover:bg-sky-500/10", dot: "bg-sky-400" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -117,11 +128,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         {/* Module quick-links */}
-        <div className="px-3 py-3 mt-auto" style={{ borderTop: "1px solid #1e293b" }}>
+        <div className="px-3 py-3" style={{ borderTop: "1px solid #1e293b" }}>
           <p className="text-xs px-3 mb-2 uppercase tracking-widest font-semibold" style={{ color: "#334155" }}>
             Modules
           </p>
           {MODULES.map((m) => {
+            const href = base + m.href;
+            const isActive = pathname.startsWith(href);
+            return (
+              <Link
+                key={m.href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all mb-0.5",
+                  m.color, m.bg
+                )}
+                style={isActive ? { background: "rgba(255,255,255,0.08)" } : {}}
+              >
+                <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", m.dot)} />
+                {m.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Intelligence & Tools */}
+        <div className="px-3 py-3 mt-auto" style={{ borderTop: "1px solid #1e293b" }}>
+          <p className="text-xs px-3 mb-2 uppercase tracking-widest font-semibold" style={{ color: "#334155" }}>
+            Intelligence
+          </p>
+          {INTELLIGENCE.map((m) => {
             const href = base + m.href;
             const isActive = pathname.startsWith(href);
             return (
