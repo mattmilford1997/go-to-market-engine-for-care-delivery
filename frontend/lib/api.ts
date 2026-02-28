@@ -1,6 +1,8 @@
 import axios from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+// NEXT_PUBLIC_API_URL can override for direct backend access.
+// Default to relative path so Next.js rewrites proxy it to the backend (set BACKEND_URL in Vercel).
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 export const api = axios.create({
   baseURL: API_BASE,

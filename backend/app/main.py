@@ -8,7 +8,12 @@ import app.models  # noqa — ensure all models are registered before create_all
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:
+        # Log but don't crash — DB may not be ready yet; individual requests will fail with 500
+        import logging
+        logging.getLogger(__name__).error("DB create_all failed on startup: %s", exc)
     yield
 from app.api.companies import router as companies_router
 from app.api.approval import router as approval_router
@@ -75,7 +80,16 @@ app.include_router(costs_router, prefix=PREFIX)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0"}
+    db_ok = False
+    try:
+        from app.db.database import SessionLocal
+        db = SessionLocal()
+        db.execute(__import__("sqlalchemy").text("SELECT 1"))
+        db.close()
+        db_ok = True
+    except Exception:
+        pass
+    return {"status": "ok" if db_ok else "degraded", "db": db_ok, "version": "2.0.0"}
 
 
 @app.get("/")
