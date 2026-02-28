@@ -200,3 +200,34 @@ describe("Leads page", () => {
     });
   });
 });
+
+  it("reloads leads after generate completes (setTimeout callback)", async () => {
+    render(<LeadsPage />);
+    await waitFor(() => screen.getByRole("button", { name: /Auto-Generate from NPPES/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Auto-Generate from NPPES/i }));
+
+    // Flush microtasks so the async continuation of handleGenerateLeads runs
+    // and registers the 3000ms setTimeout in the fake timer queue
+    await jest.runAllTimersAsync();
+
+    // Verify load() was called again (lines 34-35: callback body executed)
+    expect(mockLeads.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("uploads CSV file and reloads leads", async () => {
+    render(<LeadsPage />);
+    await waitFor(() => screen.getByRole("button", { name: /Upload CSV/i }));
+
+    // The hidden file input is triggered by the Upload CSV button click
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).toBeTruthy();
+
+    const file = new File(["npi,first_name\n123,John"], "leads.csv", { type: "text/csv" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      expect(mockUploadLeadsCsv).toHaveBeenCalledWith("company-abc", file);
+    });
+  });

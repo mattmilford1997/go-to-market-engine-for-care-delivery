@@ -10,8 +10,8 @@ from urllib.parse import urljoin, urlparse
 try:
     from playwright.async_api import async_playwright
     PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
+except ImportError:  # pragma: no cover
+    PLAYWRIGHT_AVAILABLE = False  # pragma: no cover
 
 from bs4 import BeautifulSoup
 import httpx

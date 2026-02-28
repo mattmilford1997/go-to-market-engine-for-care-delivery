@@ -181,3 +181,23 @@ describe("Settings & Credentials page", () => {
     });
   });
 });
+
+describe("Settings save flow", () => {
+  it("shows Saved checkmark after saving credential (covers setSlots and saved state)", async () => {
+    render(<SettingsPage />);
+    await waitFor(() => screen.getByPlaceholderText("Enter Anthropic API Key…"));
+
+    const input = screen.getByPlaceholderText("Enter Anthropic API Key…");
+    fireEvent.change(input, { target: { value: "sk-ant-test" } });
+
+    // Find the now-enabled Save button and click it
+    const saveButtons = screen.getAllByRole("button", { name: "Save" });
+    const enabledBtn = saveButtons.find((btn) => !btn.getAttribute("disabled"));
+    fireEvent.click(enabledBtn!);
+
+    await waitFor(() => {
+      // After save, button shows "Saved ✓" (covers line 103 bg-green-100, line 107 "Saved ✓")
+      expect(screen.getByText("Saved ✓")).toBeInTheDocument();
+    });
+  });
+});

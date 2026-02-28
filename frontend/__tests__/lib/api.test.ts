@@ -336,3 +336,16 @@ describe("profilesApi", () => {
     );
   });
 });
+
+// Additional referralApi coverage
+describe("referralApi.uploadLeadsCsv", () => {
+  it("uploadLeadsCsv posts multipart form with the file", async () => {
+    const file = new File(["npi,first_name\n123,John"], "leads.csv", { type: "text/csv" });
+    await referralApi.uploadLeadsCsv(ID, file);
+    expect(mockPost).toHaveBeenCalledWith(
+      `/referral/${ID}/leads/upload`,
+      expect.any(FormData),
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+  });
+});

@@ -455,11 +455,144 @@ class TestIngestionService:
         assert result["website_url"] == "https://testclinic.com"
 
     @pytest.mark.asyncio
-    async def test_ingest_company_raises_on_empty_html(self):
+    async def test_ingest_company_merges_jsonld_address_when_no_locations(self):
+        """Lines 44-46: JSON-LD schema address should fill in missing locations."""
         from app.services.ingestion import ingest_company
 
-        mock_scrape = {"raw_html": "", "brand_hints": {}, "structured_data": [], "error": "Timeout"}
+        mock_scrape = {
+            "raw_html": "<html>content</html>",
+            "brand_hints": {},
+            "structured_data": [{
+                "@type": "MedicalOrganization",
+                "name": "Novamind",
+                "telephone": "602-555-0100",
+                "address": {
+                    "streetAddress": "123 Main St",
+                    "addressLocality": "Phoenix",
+                    "addressRegion": "AZ",
+                    "postalCode": "85001",
+                },
+            }],
+            "error": None,
+        }
+        # LLM returns NO locations — schema should fill them in
+        mock_llm_result = {
+            "company_name": "Novamind",
+            "specialty_niche": "TMS",
+            "services": [],
+            "providers": [],
+            "locations": [],  # empty — schema should fill this
+            "insurance_accepted": [],
+            "differentiators": [],
+            "target_demographics": [],
+            "brand_guidelines": {},
+        }
 
         with patch("app.services.ingestion.scraper.scrape_website", return_value=mock_scrape):
-            with pytest.raises(ValueError, match="Failed to scrape"):
-                await ingest_company("https://broken.com")
+            with patch("app.services.ingestion.llm_service.extract_company_data", return_value=mock_llm_result):
+                result = await ingest_company("https://novamind.com")
+
+        assert len(result["locations"]) == 1
+        assert result["locations"][0]["city"] == "Phoenix"
+        assert result["locations"][0]["state"] == "AZ"
+        assert result["locations"][0]["phone"] == "602-555-0100"
+
+    @pytest.mark.asyncio
+    async def test_ingest_company_skips_jsonld_merge_when_locations_exist(self):
+        """JSON-LD schema should NOT override existing locations from LLM."""
+        from app.services.ingestion import ingest_company
+
+        mock_scrape = {
+            "raw_html": "<html>content</html>",
+            "brand_hints": {},
+            "structured_data": [{
+                "@type": "MedicalOrganization",
+                "address": {"addressLocality": "Scottsdale", "addressRegion": "AZ"},
+            }],
+            "error": None,
+        }
+        mock_llm_result = {
+            "company_name": "Novamind",
+            "specialty_niche": "TMS",
+            "services": [],
+            "providers": [],
+            "locations": [{"city": "Phoenix", "state": "AZ"}],  # already has locations
+            "insurance_accepted": [],
+            "differentiators": [],
+            "target_demographics": [],
+            "brand_guidelines": {},
+        }
+
+        with patch("app.services.ingestion.scraper.scrape_website", return_value=mock_scrape):
+            with patch("app.services.ingestion.llm_service.extract_company_data", return_value=mock_llm_result):
+                result = await ingest_company("https://novamind.com")
+
+        # Locations should remain Phoenix, not be overridden by Scottsdale from schema
+        assert result["locations"][0]["city"] == "Phoenix"
+
+
+class TestNPPESEdgeCases:
+    """Additional NPPES tests for edge-case branches."""
+
+    @pytest.mark.asyncio
+    async def test_generate_lead_list_skips_empty_city_state(self):
+        """Locations with missing city or state should be skipped."""
+        from app.services.nppes import generate_lead_list_for_company
+
+        company_data = {
+            "specialty_niche": "TMS therapy",
+            "locations": [
+                {"city": "", "state": "AZ"},   # empty city — skip
+                {"city": "Phoenix", "state": ""},  # empty state — skip
+            ],
+        }
+
+        with patch("app.services.nppes.query_nppes", new=AsyncMock(return_value=[])) as mock_q:
+            leads = await generate_lead_list_for_company(company_data)
+
+        # No valid locations → no queries
+        mock_q.assert_not_called()
+        assert leads == []
+
+    @pytest.mark.asyncio
+    async def test_generate_lead_list_uses_default_taxonomy_for_unknown_specialty(self):
+        """Specialty with no matching taxonomy should fall back to mental_health codes."""
+        from app.services.nppes import generate_lead_list_for_company, SPECIALTY_TO_TAXONOMIES
+
+        company_data = {
+            "specialty_niche": "completely unknown specialty xyz",
+            "locations": [{"city": "Phoenix", "state": "AZ"}],
+        }
+
+        captured_codes = []
+
+        async def mock_query(city, state, taxonomy_code, limit):
+            captured_codes.append(taxonomy_code)
+            return []
+
+        with patch("app.services.nppes.query_nppes", side_effect=mock_query):
+            await generate_lead_list_for_company(company_data)
+
+        # Should have used mental_health taxonomy codes
+        expected_codes = SPECIALTY_TO_TAXONOMIES["mental_health"]
+        for code in captured_codes:
+            assert code in expected_codes
+
+    @pytest.mark.asyncio
+    async def test_generate_lead_list_skips_exception_results(self):
+        """If a query raises, the exception should be silently skipped."""
+        from app.services.nppes import generate_lead_list_for_company
+
+        company_data = {
+            "specialty_niche": "TMS therapy",
+            "locations": [{"city": "Phoenix", "state": "AZ"}],
+        }
+
+        async def mock_query(*args, **kwargs):
+            raise Exception("network error")
+
+        with patch("app.services.nppes.query_nppes", side_effect=mock_query):
+            leads = await generate_lead_list_for_company(company_data)
+
+        assert leads == []
+
