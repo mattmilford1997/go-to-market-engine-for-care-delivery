@@ -4,7 +4,7 @@ from pydantic import BaseModel, HttpUrl
 from typing import Optional
 import uuid
 
-from app.db.database import get_db
+from app.db.database import get_db, SessionLocal
 from app.models.company import Company, CompanyStatus
 from app.services.ingestion import ingest_company
 
@@ -63,8 +63,8 @@ async def create_company(
     db.commit()
     db.refresh(company)
 
-    # Kick off ingestion in background
-    background_tasks.add_task(_run_ingestion, company.id, payload.website_url, db)
+    # Kick off ingestion in background (uses its own session — request session closes after response)
+    background_tasks.add_task(_run_ingestion, company.id, payload.website_url)
 
     return {"id": str(company.id), "status": "ingesting", "message": "Ingestion started"}
 
@@ -138,7 +138,7 @@ async def reingest_company(
     company = _get_or_404(company_id, db)
     company.status = CompanyStatus.ingesting
     db.commit()
-    background_tasks.add_task(_run_ingestion, company.id, company.website_url, db)
+    background_tasks.add_task(_run_ingestion, company.id, company.website_url)
     return {"status": "ingesting"}
 
 
@@ -248,11 +248,11 @@ def _compute_health(company, active_campaigns: int, pending_approvals: int) -> s
     return "green"
 
 
-async def _run_ingestion(company_id, url: str, db: Session):
+async def _run_ingestion(company_id, url: str):
     """Background task — run full ingestion pipeline and update company record."""
-    import re
     from app.services.ingestion import ingest_company
 
+    db = SessionLocal()
     try:
         data = await ingest_company(url)
         company = db.query(Company).filter(Company.id == company_id).first()
@@ -271,8 +271,10 @@ async def _run_ingestion(company_id, url: str, db: Session):
         company.brand_guidelines = data.get("brand_guidelines", {})
         company.status = CompanyStatus.active
         db.commit()
-    except Exception as e:
+    except Exception:
         company = db.query(Company).filter(Company.id == company_id).first()
         if company:
             company.status = CompanyStatus.onboarding
             db.commit()
+    finally:
+        db.close()

@@ -1,6 +1,15 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.db.database import engine, Base
+import app.models  # noqa — ensure all models are registered before create_all
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
 from app.api.companies import router as companies_router
 from app.api.approval import router as approval_router
 from app.api.modules.referral import router as referral_router
@@ -29,12 +38,13 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
