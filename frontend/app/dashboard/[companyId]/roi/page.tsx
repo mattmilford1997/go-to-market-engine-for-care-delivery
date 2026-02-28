@@ -227,7 +227,7 @@ export default function ROIPage() {
                     <Cell key={i} fill={entry.fill} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip formatter={(v: number | undefined) => v != null ? formatCurrency(v) : ""} />
                 <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: "11px" }} />
               </PieChart>
             </ResponsiveContainer>

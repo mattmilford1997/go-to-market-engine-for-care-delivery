@@ -303,7 +303,7 @@ export default function PaidAdsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
                       <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: "#64748b" }} />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Tooltip formatter={(v: number | undefined) => v != null ? formatCurrency(v) : ""} />
                       <Bar dataKey="Google" fill="#f97316" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="Meta" fill="#fb923c" radius={[4, 4, 0, 0]} />
                     </BarChart>
