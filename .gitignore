@@ -5,6 +5,10 @@ backend/**/__pycache__/
 backend/*.pyc
 backend/arche_gtm_dev.db
 backend/.env
+backend/.coverage
+backend/htmlcov/
+backend/test.db
+backend/.pytest_cache/
 
 # Node
 frontend/node_modules/
