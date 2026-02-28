@@ -357,7 +357,7 @@ export default function ReferralPage() {
             <div className="grid grid-cols-2 gap-3">
               {(Object.keys(CHANNEL_META) as Array<keyof typeof CHANNEL_META>).map((ch) => {
                 const meta = CHANNEL_META[ch];
-                const items = collateralByType[ch] || [];
+                const items = collateralByType[ch as keyof typeof collateralByType] || [];
                 const hasDone = items.length > 0;
                 return (
                   <div key={ch} className={cn("rounded-xl border p-4", meta.color)}>
