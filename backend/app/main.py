@@ -18,6 +18,8 @@ from app.api.modules.intake import router as intake_router
 from app.api.modules.chat import router as chat_router
 from app.api.modules.aeo import router as aeo_router
 from app.api.modules.video import router as video_router
+from app.api.modules.demo import router as demo_router
+from app.api.modules.spam import router as spam_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -53,6 +55,8 @@ app.include_router(intake_router, prefix=PREFIX)
 app.include_router(chat_router, prefix=PREFIX)
 app.include_router(aeo_router, prefix=PREFIX)
 app.include_router(video_router, prefix=PREFIX)
+app.include_router(demo_router, prefix=PREFIX)
+app.include_router(spam_router, prefix=PREFIX)
 
 
 @app.get("/health")

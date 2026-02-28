@@ -232,6 +232,30 @@ export const aeoApi = {
     api.post(`/aeo/${companyId}/optimize-content`, { content, page_type: pageType }),
 };
 
+// Spam Prevention & Compliance
+export const spamApi = {
+  settings: (companyId: string) => api.get(`/spam/${companyId}/settings`),
+  updateSettings: (companyId: string, data: Record<string, unknown>) =>
+    api.put(`/spam/${companyId}/settings`, data),
+  suppression: (companyId: string, channel?: string) =>
+    api.get(`/spam/${companyId}/suppression${channel ? `?channel=${channel}` : ""}`),
+  addSuppression: (companyId: string, data: Record<string, unknown>) =>
+    api.post(`/spam/${companyId}/suppression`, data),
+  removeSuppression: (companyId: string, id: string) =>
+    api.delete(`/spam/${companyId}/suppression/${id}`),
+  check: (companyId: string, contact: string, channel: string) =>
+    api.post(`/spam/${companyId}/check`, { contact, channel }),
+  auditLog: (companyId: string) => api.get(`/spam/${companyId}/audit`),
+  complianceReport: (companyId: string) =>
+    api.get(`/spam/${companyId}/compliance-report`),
+};
+
+// Demo data seeding
+export const demoApi = {
+  loadAll: (companyId: string) => api.post(`/demo/${companyId}/load-all`),
+  clear: (companyId: string) => api.delete(`/demo/${companyId}/clear`),
+};
+
 // Video Ad Generator
 export const videoApi = {
   platforms: () => api.get("/video/platforms"),

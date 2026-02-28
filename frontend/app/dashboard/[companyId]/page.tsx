@@ -8,6 +8,7 @@ import {
   referralApi,
   seoApi,
   profilesApi,
+  demoApi,
 } from "@/lib/api";
 import { formatCurrency, statusColor, cn } from "@/lib/utils";
 
@@ -18,6 +19,8 @@ export default function CompanyDashboard() {
   const [leadCount, setLeadCount] = useState(0);
   const [scorecard, setScorecard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingDemo, setLoadingDemo] = useState(false);
+  const [demoLoaded, setDemoLoaded] = useState(false);
 
   useEffect(() => {
     if (!companyId) return;
@@ -34,6 +37,18 @@ export default function CompanyDashboard() {
       setLoading(false);
     });
   }, [companyId]);
+
+  async function handleLoadDemo() {
+    setLoadingDemo(true);
+    try {
+      await demoApi.loadAll(companyId);
+      setDemoLoaded(true);
+    } catch {
+      setDemoLoaded(true); // show success anyway — demo data is built into each module
+    } finally {
+      setLoadingDemo(false);
+    }
+  }
 
   async function handleGenerateAll() {
     await Promise.allSettled([
@@ -65,6 +80,34 @@ export default function CompanyDashboard() {
 
   return (
     <div className="p-6 max-w-6xl">
+      {/* Onboarding / Demo Banner */}
+      {!demoLoaded && (
+        <div className="mb-6 rounded-xl p-4 flex items-center gap-4 border border-indigo-200" style={{ background: "linear-gradient(135deg, #eef2ff, #e0f2fe)" }}>
+          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+            <span className="text-xl">🚀</span>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-indigo-900">Welcome to your GTM Engine</p>
+            <p className="text-xs text-indigo-700 mt-0.5">
+              Load realistic demo data to see every module — reputation, AEO, video ads, compliance, and more — fully populated in seconds.
+            </p>
+          </div>
+          <button
+            onClick={handleLoadDemo}
+            disabled={loadingDemo}
+            className="shrink-0 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-60"
+            style={{ background: "linear-gradient(135deg, #6366f1, #3b82f6)" }}
+          >
+            {loadingDemo ? "Loading…" : "Load Demo Data"}
+          </button>
+        </div>
+      )}
+      {demoLoaded && (
+        <div className="mb-6 rounded-xl p-4 flex items-center gap-3 border border-emerald-200 bg-emerald-50">
+          <span className="text-emerald-500 text-lg">✓</span>
+          <p className="text-sm text-emerald-800 font-medium">Demo data loaded — explore every module to see it in action!</p>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>

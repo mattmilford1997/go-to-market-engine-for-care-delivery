@@ -120,6 +120,12 @@ def mock_llm():
         "app.api.modules.profiles.llm_service",
         "app.api.modules.referral.llm_service",
         "app.api.modules.seo.llm_service",
+        "app.api.modules.aeo.llm_service",
+        "app.api.modules.video.llm_service",
+        "app.api.modules.chat.llm_service",
+        "app.api.modules.reputation.llm_service",
+        "app.api.modules.reports.llm_service",
+        "app.api.modules.competitors.llm_service",
     ]
 
     patches = [patch(t) for t in targets]

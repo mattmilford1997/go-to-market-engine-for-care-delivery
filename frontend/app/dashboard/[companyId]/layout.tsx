@@ -33,6 +33,7 @@ const INTELLIGENCE = [
   { href: "/video", label: "Video Ad Generator", color: "text-pink-400 hover:text-pink-300", bg: "hover:bg-pink-500/10", dot: "bg-pink-400" },
   { href: "/templates", label: "Templates", color: "text-violet-300 hover:text-violet-200", bg: "hover:bg-violet-500/10", dot: "bg-violet-300" },
   { href: "/intake", label: "Intake Forms", color: "text-teal-400 hover:text-teal-300", bg: "hover:bg-teal-500/10", dot: "bg-teal-400" },
+  { href: "/spam", label: "Spam & Compliance", color: "text-purple-400 hover:text-purple-300", bg: "hover:bg-purple-500/10", dot: "bg-purple-400" },
   { href: "/ask", label: "AI Strategy Chat", color: "text-sky-400 hover:text-sky-300", bg: "hover:bg-sky-500/10", dot: "bg-sky-400" },
 ];
 

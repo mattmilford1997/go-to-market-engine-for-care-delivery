@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+from app.db.database import get_db
 from app.models import Campaign, ContentItem
 from datetime import datetime
 import uuid
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
+
+# In-memory event cache — seeded by /demo/{company_id}/load-all
+_event_cache: dict[str, list] = {}
 
 
 def _channel_color(channel: str) -> str:
@@ -30,6 +33,10 @@ async def get_events(
     now = datetime.utcnow()
     month = month or now.month
     year = year or now.year
+
+    # Return cached events if available (e.g. from demo seed or created via POST)
+    if company_id in _event_cache:
+        return {"events": _event_cache[company_id], "month": month, "year": year}
 
     events: list[dict] = []
 

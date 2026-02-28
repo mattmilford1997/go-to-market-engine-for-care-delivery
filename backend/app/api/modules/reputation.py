@@ -14,6 +14,9 @@ from app.services.llm import llm_service
 
 router = APIRouter(prefix="/reputation", tags=["reputation"])
 
+# In-memory review cache — seeded by /demo/{company_id}/load-all or persists reviews across requests
+_review_cache: dict[str, list] = {}
+
 # Demo review pool (populated with realistic behavioral-health reviews)
 _DEMO_REVIEWS = [
     {"id": "r1", "platform": "Google", "author": "Jessica M.", "rating": 5,
@@ -53,7 +56,7 @@ async def get_reviews(
     db: Session = Depends(get_db),
 ):
     _get_company(company_id, db)
-    reviews = _DEMO_REVIEWS[:limit]
+    reviews = _review_cache.get(company_id, _DEMO_REVIEWS)[:limit]
     if platform != "all":
         reviews = [r for r in reviews if r["platform"].lower() == platform.lower()]
     return {"reviews": reviews, "total": len(reviews)}
@@ -63,7 +66,7 @@ async def get_reviews(
 async def get_reputation_summary(company_id: str, db: Session = Depends(get_db)):
     company = _get_company(company_id, db)
 
-    reviews = _DEMO_REVIEWS
+    reviews = _review_cache.get(company_id, _DEMO_REVIEWS)
     total = len(reviews)
     avg_rating = round(sum(r["rating"] for r in reviews) / max(total, 1), 1)
     five_star = sum(1 for r in reviews if r["rating"] == 5)
@@ -113,7 +116,7 @@ async def suggest_response(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    review = next((r for r in _DEMO_REVIEWS if r["id"] == review_id), None)
+    review = next((r for r in _review_cache.get(company_id, _DEMO_REVIEWS) if r["id"] == review_id), None)
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
 
@@ -156,7 +159,7 @@ Return JSON: {{"response": str, "tone": str, "word_count": int}}"""
 async def analyze_overall_sentiment(company_id: str, db: Session = Depends(get_db)):
     company = _get_company(company_id, db)
 
-    review_texts = "\n".join([f"[{r['rating']}★] {r['text']}" for r in _DEMO_REVIEWS])
+    review_texts = "\n".join([f"[{r['rating']}★] {r['text']}" for r in _review_cache.get(company_id, _DEMO_REVIEWS)])
     prompt = f"""Analyze patient reviews for {company.name}:
 
 {review_texts}
