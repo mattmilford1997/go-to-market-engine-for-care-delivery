@@ -21,7 +21,10 @@ export default function Home() {
       });
       router.push(`/dashboard/${res.data.id}`);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Failed to start onboarding");
+      const detail = err?.response?.data?.detail;
+      const status = err?.response?.status;
+      const msg = err?.message;
+      setError(detail || (status ? `Error ${status}` : msg || "Failed to start onboarding"));
     } finally {
       setLoading(false);
     }
