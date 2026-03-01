@@ -7,10 +7,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND = (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
 
-async function proxy(req: NextRequest, params: { path: string[] }) {
-  const path = params.path.join("/");
+type Params = Promise<{ path: string[] }>;
+
+async function proxy(req: NextRequest, params: Params) {
+  const { path } = await params;
   const search = req.nextUrl.search ?? "";
-  const url = `${BACKEND}/api/v1/${path}${search}`;
+  const url = `${BACKEND}/api/v1/${path.join("/")}${search}`;
 
   const headers = new Headers();
   const contentType = req.headers.get("content-type");
@@ -42,13 +44,13 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
   return new NextResponse(res.body, { status: res.status, headers: resHeaders });
 }
 
-export const GET = (req: NextRequest, { params }: { params: { path: string[] } }) =>
+export const GET = (req: NextRequest, { params }: { params: Params }) =>
   proxy(req, params);
-export const POST = (req: NextRequest, { params }: { params: { path: string[] } }) =>
+export const POST = (req: NextRequest, { params }: { params: Params }) =>
   proxy(req, params);
-export const PATCH = (req: NextRequest, { params }: { params: { path: string[] } }) =>
+export const PATCH = (req: NextRequest, { params }: { params: Params }) =>
   proxy(req, params);
-export const PUT = (req: NextRequest, { params }: { params: { path: string[] } }) =>
+export const PUT = (req: NextRequest, { params }: { params: Params }) =>
   proxy(req, params);
-export const DELETE = (req: NextRequest, { params }: { params: { path: string[] } }) =>
+export const DELETE = (req: NextRequest, { params }: { params: Params }) =>
   proxy(req, params);
