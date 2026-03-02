@@ -38,8 +38,11 @@ export default function LeadsPage() {
       // Wait for NPPES background task before refreshing
       await new Promise((r) => setTimeout(r, 28000));
       await load(statusFilter);
-    } catch {
-      showToast("Lead generation failed — check your API configuration.");
+    } catch (err: any) {
+      const msg = err?.isNetworkError
+        ? "Cannot reach backend API — set BACKEND_URL in Railway to your backend service URL."
+        : "Lead generation failed — check your API configuration.";
+      showToast(msg);
     } finally {
       setGenerating(false);
     }

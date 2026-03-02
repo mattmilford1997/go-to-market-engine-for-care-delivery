@@ -163,8 +163,11 @@ export default function PaidAdsPage() {
       await new Promise((r) => setTimeout(r, delayMs[type] ?? 20000));
       const q = await approvalApi.queue(companyId, "paid_ads").catch(() => ({ data: { items: [] } }));
       setQueueItems(q.data.items || []);
-    } catch {
-      showToast("Generation failed — ensure ANTHROPIC_API_KEY is set.");
+    } catch (err: any) {
+      const msg = err?.isNetworkError
+        ? "Cannot reach backend API — set BACKEND_URL in Railway to your backend service URL."
+        : "Generation failed — ensure ANTHROPIC_API_KEY is set on the backend.";
+      showToast(msg);
     } finally {
       setGenerating(null);
     }

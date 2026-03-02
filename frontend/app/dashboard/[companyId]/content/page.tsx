@@ -407,8 +407,11 @@ export default function ContentPage() {
       ]);
       setItems(i.data.items || i.data || []);
       if (c) setCalendar(c.data.weeks || []);
-    } catch {
-      showToast("Generation failed — ensure ANTHROPIC_API_KEY is set.");
+    } catch (err: any) {
+      const msg = err?.isNetworkError
+        ? "Cannot reach backend API — set BACKEND_URL in Railway to your backend service URL."
+        : "Generation failed — ensure ANTHROPIC_API_KEY is set on the backend.";
+      showToast(msg);
       // Keep the progress banner visible for at least 2 seconds even on quick failures
       const elapsed = Date.now() - startedAt;
       if (elapsed < 2000) await new Promise((r) => setTimeout(r, 2000 - elapsed));

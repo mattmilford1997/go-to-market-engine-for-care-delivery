@@ -9,6 +9,19 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Intercept errors so components can tell apart network failures from API errors
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (!err.response) {
+      // No HTTP response — backend is unreachable (BACKEND_URL not configured or backend down)
+      err.isNetworkError = true;
+      err.message = "Cannot reach backend API — set BACKEND_URL in Railway to your backend service URL.";
+    }
+    return Promise.reject(err);
+  }
+);
+
 // LLM Provider Settings
 export const llmSettingsApi = {
   providers: () => api.get("/llm-settings/providers"),

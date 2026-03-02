@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { companiesApi, approvalApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import type { AxiosError } from "axios";
 
 const NAV = [
   { href: "", label: "Overview", icon: "⬡" },
@@ -46,11 +47,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const { data: company } = useQuery({
+  const { data: company, error: companyError } = useQuery({
     queryKey: ["company", companyId],
     queryFn: () => companiesApi.get(companyId).then((r) => r.data),
     enabled: !!companyId,
+    retry: 1,
   });
+
+  // True when there is no HTTP response at all — backend is unreachable
+  const isNetworkError = !!companyError && !(companyError as AxiosError)?.response;
 
   const { data: approvalData } = useQuery({
     queryKey: ["approval-count", companyId],
@@ -257,6 +262,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           )}
         </div>
+
+        {/* Backend connectivity warning */}
+        {isNetworkError && (
+          <div className="sticky top-0 z-40 bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-start gap-2 text-sm text-amber-900">
+            <span className="shrink-0 mt-0.5">⚠️</span>
+            <span>
+              <strong>Backend API unreachable.</strong> Set the{" "}
+              <code className="bg-amber-100 border border-amber-300 rounded px-1 font-mono text-xs">BACKEND_URL</code>{" "}
+              environment variable in your Railway frontend service to your backend&apos;s Railway URL
+              (e.g. <code className="bg-amber-100 border border-amber-300 rounded px-1 font-mono text-xs">https://your-backend.up.railway.app</code>).
+              All generate and data features will be unavailable until this is configured.
+            </span>
+          </div>
+        )}
 
         {children}
       </main>
