@@ -35,9 +35,16 @@ class TestContentBgTasks:
         from app.api.modules.content import _generate_blog_post_bg
         from app.models.content import ContentItem, ContentType, ContentStatus
 
-        await _generate_blog_post_bg(
-            created_company.id, _company_data(), "TMS therapy insurance", 1500, db
-        )
+        # _generate_blog_post_bg now owns its own DB session via SessionLocal().
+        # Patch SessionLocal so the bg task uses the test session instead of
+        # opening a second connection to the real DB.
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()  # prevent closing the shared test session
+
+        with patch("app.api.modules.content.SessionLocal", return_value=mock_session):
+            await _generate_blog_post_bg(
+                created_company.id, _company_data(), "TMS therapy insurance", 1500
+            )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -45,7 +52,7 @@ class TestContentBgTasks:
         ).first()
         assert item is not None
         assert item.status == ContentStatus.pending_review
-        assert "TMS" in item.title or "tms" in item.title.lower() or item.title
+        assert item.title  # title is set from LLM response
 
     @pytest.mark.asyncio
     async def test_generate_social_bg_facebook(self, created_company, db, mock_llm):
@@ -112,7 +119,12 @@ class TestContentBgTasks:
         from app.api.modules.content import _generate_calendar_bg
         from app.models.content import ContentItem
 
-        await _generate_calendar_bg(created_company.id, _company_data(), db)
+        # _generate_calendar_bg now owns its own DB session via SessionLocal().
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+
+        with patch("app.api.modules.content.SessionLocal", return_value=mock_session):
+            await _generate_calendar_bg(created_company.id, _company_data())
 
         items = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -444,7 +456,7 @@ class TestProfilesBgTasks:
 
     @pytest.mark.asyncio
     async def test_auto_create_profile_bg_no_playwright(self, created_company, db, mock_llm):
-        """When Playwright is not available, status should be set to needs_manual."""
+        """When Playwright is not available (ImportError), status is set to needs_manual."""
         from app.api.modules.profiles import (
             _generate_profile_content_bg,
             _auto_create_profile_bg,
@@ -454,8 +466,13 @@ class TestProfilesBgTasks:
         await _generate_profile_content_bg(
             created_company.id, _company_data(), "vitals", db
         )
-        # Now auto-create — will fall back to needs_manual without Playwright
-        await _auto_create_profile_bg(created_company.id, "vitals", db)
+        # Simulate Playwright not being installed — the function uses
+        # `from app.services.playwright_automation import get_automator` inside
+        # a try block. Setting the module to None in sys.modules makes that
+        # import raise ImportError, which sets status to "needs_manual".
+        import sys
+        with patch.dict(sys.modules, {"app.services.playwright_automation": None}):
+            await _auto_create_profile_bg(created_company.id, "vitals", db)
 
         from app.models.seo import DirectoryProfile
         profile = db.query(DirectoryProfile).filter(
@@ -767,8 +784,14 @@ class TestCompaniesBgTasks:
             "brand_guidelines": {},
         }
 
+        # _run_ingestion owns its own DB session via SessionLocal().
+        # Patch it so the task uses the test session without closing it.
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+
         with patch("app.services.ingestion.ingest_company", new=AsyncMock(return_value=mock_data)):
-            await _run_ingestion(created_company.id, "https://example.com", db)
+            with patch("app.api.companies.SessionLocal", return_value=mock_session):
+                await _run_ingestion(created_company.id, "https://example.com")
 
         db.refresh(created_company)
         assert created_company.name == "New Name"
@@ -779,8 +802,12 @@ class TestCompaniesBgTasks:
         from app.api.companies import _run_ingestion
         from app.models.company import CompanyStatus
 
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+
         with patch("app.services.ingestion.ingest_company", new=AsyncMock(side_effect=Exception("scrape failed"))):
-            await _run_ingestion(created_company.id, "https://example.com", db)
+            with patch("app.api.companies.SessionLocal", return_value=mock_session):
+                await _run_ingestion(created_company.id, "https://example.com")
 
         db.refresh(created_company)
         assert created_company.status == CompanyStatus.onboarding
@@ -790,10 +817,14 @@ class TestCompaniesBgTasks:
         from app.api.companies import _run_ingestion
         import uuid
 
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+
         mock_data = {"company_name": "X"}
         with patch("app.services.ingestion.ingest_company", new=AsyncMock(return_value=mock_data)):
-            # Should return without error when company ID doesn't exist
-            await _run_ingestion(str(uuid.uuid4()), "https://example.com", db)
+            with patch("app.api.companies.SessionLocal", return_value=mock_session):
+                # Should return without error when company ID doesn't exist
+                await _run_ingestion(str(uuid.uuid4()), "https://example.com")
 
     def test_compute_health_ingesting(self):
         from app.api.companies import _compute_health

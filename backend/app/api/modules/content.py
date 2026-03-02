@@ -29,7 +29,7 @@ async def get_content_calendar(
     ).count()
 
     if existing == 0:
-        background_tasks.add_task(_generate_calendar_bg, company_id, _company_data(company), db)
+        background_tasks.add_task(_generate_calendar_bg, company_id, _company_data(company))
         return {"status": "generating", "message": "Content calendar generation started"}
 
     posts = db.query(ContentItem).filter(

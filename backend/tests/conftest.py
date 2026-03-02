@@ -207,6 +207,14 @@ def mock_llm():
                 for i in range(1, 5)
             ]
         }
+        # Platform-specific ad generation (reddit, microsoft, quora, tiktok, linkedin, pinterest)
+        m._chat_json.return_value = {
+            "ads": [
+                {"title": "Ad 1 — Test Clinic", "body": "Body text for ad 1", "cta": "Learn More"},
+                {"title": "Ad 2 — Test Clinic", "body": "Body text for ad 2", "cta": "Call Now"},
+                {"title": "Ad 3 — Test Clinic", "body": "Body text for ad 3", "cta": "Get Started"},
+            ]
+        }
 
     try:
         yield mocks[0]  # primary mock for assertions

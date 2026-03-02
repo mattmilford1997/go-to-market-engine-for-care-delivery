@@ -512,10 +512,16 @@ async def _generate_platform_ads_bg(company_id: str, company_data: dict, platfor
     name = company_data.get("company_name", "our clinic")
     niche = company_data.get("specialty_niche", "behavioral health")
 
-    prompt = PLATFORM_PROMPTS.get(
-        platform,
-        'Generate 3 ads for {name}, a {niche} clinic. Return JSON: {"ads": [{"title": "...", "body": "..."}]}',
-    ).format(name=name, niche=niche)
+    # Use str.replace instead of .format() so JSON examples in the prompt strings
+    # (which contain literal { and }) don't get misinterpreted as format placeholders.
+    prompt = (
+        PLATFORM_PROMPTS.get(
+            platform,
+            'Generate 3 ads for {name}, a {niche} clinic. Return JSON: {"ads": [{"title": "...", "body": "..."}]}',
+        )
+        .replace("{name}", name)
+        .replace("{niche}", niche)
+    )
 
     ads: list = []
     try:
