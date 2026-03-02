@@ -272,8 +272,8 @@ export default function ReferralPage() {
       )}
 
       {/* Hero Header */}
-      <div className="gradient-referral px-8 py-7 text-white">
-        <div className="flex items-start justify-between">
+      <div className="gradient-referral px-4 sm:px-8 py-5 sm:py-7 text-white">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-5 h-5 opacity-80" />
@@ -282,10 +282,10 @@ export default function ReferralPage() {
             <h1 className="text-2xl font-bold">Referral Pipeline</h1>
             <p className="text-emerald-100 text-sm mt-1">Provider leads · Multi-channel outreach · 30-day sequences</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={loadDemoData}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+              className="flex items-center gap-2 px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
             >
               <Zap className="w-4 h-4" />
               Load Demo
@@ -293,7 +293,7 @@ export default function ReferralPage() {
             <button
               onClick={handleGenerateLeads}
               disabled={generatingLeads}
-              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
             >
               {generatingLeads ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
               Generate Leads
@@ -301,7 +301,7 @@ export default function ReferralPage() {
             <button
               onClick={handleGenerateCollateral}
               disabled={generating}
-              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
             >
               {generating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               Generate All Collateral
@@ -336,9 +336,9 @@ export default function ReferralPage() {
         color="emerald"
       />
 
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
         {/* Stats Row */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <StatCard icon={<Users className="w-5 h-5 text-emerald-600" />} label="Total Leads" value={formatNumber(leads.length)} sub="In database" accent="bg-emerald-50" />
           <StatCard icon={<TrendingUp className="w-5 h-5 text-blue-600" />} label="New Leads" value={statusCounts.new || 0} sub="Ready to contact" accent="bg-blue-50" />
           <StatCard icon={<CheckCircle className="w-5 h-5 text-indigo-600" />} label="Actively Referring" value={statusCounts.referring || 0} sub="Converted providers" accent="bg-indigo-50" />
@@ -346,9 +346,9 @@ export default function ReferralPage() {
         </div>
 
         {/* Two column: Pipeline + Collateral */}
-        <div className="grid grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6">
           {/* Pipeline Funnel */}
-          <div className="card p-6 col-span-2">
+          <div className="card p-4 sm:p-6 col-span-1 lg:col-span-2">
             <h2 className="text-base font-semibold text-slate-900 mb-4">Lead Pipeline</h2>
             <div className="space-y-2">
               {STATUS_PIPELINE.map((s) => {
@@ -379,7 +379,7 @@ export default function ReferralPage() {
           </div>
 
           {/* Collateral Status */}
-          <div className="card p-6 col-span-3">
+          <div className="card p-4 sm:p-6 col-span-1 lg:col-span-3">
             <h2 className="text-base font-semibold text-slate-900 mb-4">Collateral Status</h2>
             <div className="grid grid-cols-2 gap-3">
               {(Object.keys(CHANNEL_META) as Array<keyof typeof CHANNEL_META>).map((ch) => {

@@ -62,18 +62,18 @@ export default function LeadsPage() {
         color="blue"
       />
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Referral Leads</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Referral Leads</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             {total} provider{total !== 1 ? "s" : ""} in pipeline ·
             Auto-generated via NPPES + CSV upload
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => fileRef.current?.click()}
-            className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
           >
             Upload CSV
           </button>
@@ -81,7 +81,7 @@ export default function LeadsPage() {
           <button
             onClick={handleGenerateLeads}
             disabled={generating}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
+            className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
           >
             {generating ? "Generating…" : "Auto-Generate from NPPES"}
           </button>
@@ -124,8 +124,8 @@ export default function LeadsPage() {
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Provider</th>

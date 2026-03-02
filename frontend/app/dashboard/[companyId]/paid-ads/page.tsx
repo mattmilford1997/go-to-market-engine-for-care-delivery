@@ -213,8 +213,8 @@ export default function PaidAdsPage() {
         color="orange"
       />
       {/* Hero Header */}
-      <div className="gradient-paid-ads px-8 py-7 text-white">
-        <div className="flex items-start justify-between">
+      <div className="gradient-paid-ads px-4 sm:px-8 py-5 sm:py-7 text-white">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Target className="w-5 h-5 opacity-80" />
@@ -223,10 +223,10 @@ export default function PaidAdsPage() {
             <h1 className="text-2xl font-bold">Paid Ads Manager</h1>
             <p className="text-orange-100 text-sm mt-1">Google Ads keyword clusters · Meta audience targeting · RSA copy</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={loadDemoData}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+              className="flex items-center gap-2 px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
             >
               <Zap className="w-4 h-4" />
               Load Demo
@@ -234,26 +234,26 @@ export default function PaidAdsPage() {
             <button
               onClick={() => handleGenerate("google")}
               disabled={!!generating}
-              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
             >
               {generating === "google" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              Generate Google Ads
+              Google Ads
             </button>
             <button
               onClick={() => handleGenerate("meta")}
               disabled={!!generating}
-              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
             >
               {generating === "meta" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
-              Generate Meta Ads
+              Meta Ads
             </button>
           </div>
         </div>
       </div>
 
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
         {/* Stats Row */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <StatCard icon={<Target className="w-5 h-5 text-orange-600" />} label="Keyword Clusters" value={googleItems.length > 0 ? "6" : "0"} sub="Top clusters ready" accent="bg-orange-50" />
           <StatCard icon={<Zap className="w-5 h-5 text-amber-600" />} label="Ad Copies Generated" value={googleItems.filter((i) => i.item_type?.includes("copy") || i.item_type?.includes("ad")).length} sub="RSA + Meta copies" accent="bg-amber-50" />
           <StatCard icon={<TrendingUp className="w-5 h-5 text-blue-600" />} label="Meta Audiences" value={audiences.length} sub="Audience templates" accent="bg-blue-50" />
@@ -269,7 +269,7 @@ export default function PaidAdsPage() {
         </div>
 
         {/* Platform Grid */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {ALL_PLATFORMS.map((p) => {
             const pItems = p.id === "google" ? googleItems : p.id === "meta" ? metaItems : platformItems(p.id);
             return (
@@ -396,7 +396,7 @@ export default function PaidAdsPage() {
             {/* Keyword Strategy Guide */}
             <div className="card p-6">
               <SectionHeader title="Keyword Strategy" subtitle="High-intent clusters for mental health practices" />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { cluster: "TMS Therapy Near Me", intent: "High", volume: "8,100/mo", competition: "Medium" },
                   { cluster: "Ketamine Treatment Center", intent: "High", volume: "5,400/mo", competition: "Medium" },
@@ -440,7 +440,7 @@ export default function PaidAdsPage() {
                 }
               />
               {audiences.length === 0 ? (
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[
                     {
                       name: "Depression & Anxiety Seekers",
@@ -497,7 +497,7 @@ export default function PaidAdsPage() {
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {audiences.map((aud, i) => (
                     <div key={aud.id} className="rounded-xl border border-slate-200 p-5">
                       <div className="flex items-center gap-2 mb-3">

@@ -168,6 +168,21 @@ body {
   background: #f8fafc;
 }
 
+/* ─── Mobile ────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .data-table th {
+    padding: 8px 8px;
+    font-size: 0.65rem;
+  }
+  .data-table td {
+    padding: 10px 8px;
+    font-size: 0.8rem;
+  }
+  .stat-number {
+    font-size: 1.5rem;
+  }
+}
+
 /* ─── Badge ─────────────────────────────────────────────────── */
 .badge {
   display: inline-flex;

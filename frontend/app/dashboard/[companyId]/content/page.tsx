@@ -461,8 +461,8 @@ export default function ContentPage() {
       )}
 
       {/* Hero Header */}
-      <div className="gradient-content px-8 py-7 text-white">
-        <div className="flex items-start justify-between">
+      <div className="gradient-content px-4 sm:px-8 py-5 sm:py-7 text-white">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <FileText className="w-5 h-5 opacity-80" />
@@ -471,10 +471,10 @@ export default function ContentPage() {
             <h1 className="text-2xl font-bold">Content Studio</h1>
             <p className="text-violet-100 text-sm mt-1">Blog posts · Social media · 12-week editorial calendar</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={loadDemoData}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+              className="flex items-center gap-2 px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
             >
               <Zap className="w-4 h-4" />
               Load Demo
@@ -482,7 +482,7 @@ export default function ContentPage() {
             <button
               onClick={() => handleGenerate("blog")}
               disabled={!!generating}
-              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
             >
               {generating === "blog" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
               New Blog Post
@@ -490,7 +490,7 @@ export default function ContentPage() {
             <button
               onClick={() => handleGenerate("social")}
               disabled={!!generating}
-              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
             >
               {generating === "social" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Instagram className="w-4 h-4" />}
               Social Posts
@@ -498,10 +498,10 @@ export default function ContentPage() {
             <button
               onClick={() => handleGenerate("calendar")}
               disabled={!!generating}
-              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
             >
               {generating === "calendar" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-              Generate 12-Week Calendar
+              12-Week Calendar
             </button>
           </div>
         </div>
@@ -535,9 +535,9 @@ export default function ContentPage() {
         color="violet"
       />
 
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
         {/* Stats Row */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <StatCard icon={<FileText className="w-5 h-5 text-violet-600" />} label="Total Content" value={total} sub="All types" accent="bg-violet-50" />
           <StatCard icon={<CheckCircle className="w-5 h-5 text-emerald-600" />} label="Published" value={published} sub="Live on site" accent="bg-emerald-50" />
           <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} label="Pending Review" value={pending} sub="Awaiting approval" accent="bg-amber-50" />
@@ -545,9 +545,9 @@ export default function ContentPage() {
         </div>
 
         {/* Two-column: Calendar + Distribution */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Content Calendar */}
-          <div className="card p-6 col-span-2">
+          <div className="card p-4 sm:p-6 col-span-1 lg:col-span-2">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">12-Week Content Calendar</h2>

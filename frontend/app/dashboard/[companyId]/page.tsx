@@ -93,7 +93,7 @@ export default function CompanyDashboard() {
   const adSpend = (company?.budgets?.google_ads || 0) + (company?.budgets?.meta_ads || 0);
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-3 sm:p-6 max-w-6xl">
       <ProgressBanner
         active={generatingAll}
         label="Generating Leads + Referral Collateral"
@@ -135,9 +135,9 @@ export default function CompanyDashboard() {
         </div>
       )}
 
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{company.name}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{company.name}</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             {company.specialty_niche || "Specialty not yet ingested"}
             {" · "}
@@ -146,7 +146,7 @@ export default function CompanyDashboard() {
             </a>
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {company.status === "ingesting" ? (
             <span className="px-3 py-1.5 rounded-lg bg-orange-50 text-orange-600 text-sm font-medium flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
@@ -163,7 +163,7 @@ export default function CompanyDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
           { label: "Monthly Marketing Spend", value: formatCurrency(totalBudget), sub: `+ ${formatCurrency(adSpend)} ad spend`, color: "text-gray-900" },
           { label: "Pending Approvals", value: approvalCount.toString(), sub: "items need review", color: approvalCount > 0 ? "text-blue-600" : "text-gray-900", href: `/dashboard/${companyId}/approval` },
@@ -182,7 +182,7 @@ export default function CompanyDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {[
           { num: "01", label: "Paid Ads", items: ["Google Ads", "Meta Ads"], status: company.credentials?.google_ads_api_key ? "active" : "needs_credentials", color: "orange" },
           { num: "02", label: "Referral", items: ["Email", "Fax", "Voicemail", "Mail"], status: leadCount > 0 ? "active" : "ready", color: "green" },
@@ -207,7 +207,7 @@ export default function CompanyDashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="font-semibold text-gray-800 mb-3">Practice Overview</h2>
           <div className="space-y-2 text-sm">
