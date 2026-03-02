@@ -80,11 +80,17 @@ app.include_router(costs_router, prefix=PREFIX)
 
 @app.get("/health")
 async def health():
+    return {"status": "ok", "version": "2.0.0"}
+
+
+@app.get("/health/detailed")
+async def health_detailed():
     db_ok = False
     try:
         from app.db.database import SessionLocal
+        import sqlalchemy
         db = SessionLocal()
-        db.execute(__import__("sqlalchemy").text("SELECT 1"))
+        db.execute(sqlalchemy.text("SELECT 1"))
         db.close()
         db_ok = True
     except Exception:
