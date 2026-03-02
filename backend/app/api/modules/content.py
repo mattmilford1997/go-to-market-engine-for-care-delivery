@@ -236,7 +236,11 @@ def _add_approval_item(db, company_id, content_item, module, type_label):
         content_item_id=content_item.id,
         item_type=type_label.lower().replace(" ", "_"),
         title=content_item.title,
-        preview_data={"body_preview": (content_item.body or "")[:500]},
+        preview_data={
+            "body_preview": (content_item.body or "")[:500],
+            "content_type": content_item.content_type,
+            **(content_item.metadata or {}),
+        },
         module=module,
     )
     db.add(item)
