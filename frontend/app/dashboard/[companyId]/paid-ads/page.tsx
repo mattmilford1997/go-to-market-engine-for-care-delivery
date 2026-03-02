@@ -152,12 +152,15 @@ export default function PaidAdsPage() {
 
   const handleGenerate = async (type: string) => {
     setGenerating(type);
+    const delayMs: Record<string, number> = { google: 20000, meta: 20000 };
     try {
       if (type === "google") await paidAdsApi.generateAllGoogle(companyId);
       else if (type === "meta") await paidAdsApi.generateAllMeta(companyId);
       else await paidAdsApi.generatePlatform(companyId, type);
       const plat = ALL_PLATFORMS.find((p) => p.id === type);
       showToast(`${plat?.name || type} ads queued for generation — check Approval Queue shortly.`);
+      // Wait for background generation to complete before refetching
+      await new Promise((r) => setTimeout(r, delayMs[type] ?? 20000));
       const q = await approvalApi.queue(companyId, "paid_ads").catch(() => ({ data: { items: [] } }));
       setQueueItems(q.data.items || []);
     } catch {
@@ -198,20 +201,6 @@ export default function PaidAdsPage() {
         </div>
       )}
 
-      <ProgressBanner
-        active={generating === "google"}
-        label="Generating Google Ads"
-        estimatedSeconds={20}
-        steps={["Building keyword clusters…", "Writing RSA headlines…", "Crafting ad descriptions…", "Saving to Approval Queue…"]}
-        color="orange"
-      />
-      <ProgressBanner
-        active={generating === "meta"}
-        label="Generating Meta Ads"
-        estimatedSeconds={20}
-        steps={["Defining audience segments…", "Writing ad copy…", "Crafting primary text…", "Saving to Approval Queue…"]}
-        color="orange"
-      />
       {/* Hero Header */}
       <div className="gradient-paid-ads px-4 sm:px-8 py-5 sm:py-7 text-white">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -250,6 +239,31 @@ export default function PaidAdsPage() {
           </div>
         </div>
       </div>
+
+      {/* Progress banners — placed after header so they're always in view */}
+      <ProgressBanner
+        active={generating === "google"}
+        label="Generating Google Ads"
+        estimatedSeconds={20}
+        steps={["Building keyword clusters…", "Writing RSA headlines…", "Crafting ad descriptions…", "Saving to Approval Queue…"]}
+        color="orange"
+      />
+      <ProgressBanner
+        active={generating === "meta"}
+        label="Generating Meta Ads"
+        estimatedSeconds={20}
+        steps={["Defining audience segments…", "Writing ad copy…", "Crafting primary text…", "Saving to Approval Queue…"]}
+        color="orange"
+      />
+      {generating !== null && generating !== "google" && generating !== "meta" && (
+        <ProgressBanner
+          active={!!generating}
+          label={`Generating ${ALL_PLATFORMS.find((p) => p.id === generating)?.name ?? generating} Ads`}
+          estimatedSeconds={20}
+          steps={["Analysing platform requirements…", "Writing ad copy…", "Tailoring to audience…", "Saving to Approval Queue…"]}
+          color="orange"
+        />
+      )}
 
       <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
         {/* Stats Row */}

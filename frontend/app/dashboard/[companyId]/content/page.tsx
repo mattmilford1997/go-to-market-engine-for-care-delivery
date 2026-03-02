@@ -385,6 +385,7 @@ export default function ContentPage() {
     // Estimated seconds per type — must exceed the ProgressBanner estimatedSeconds so
     // items exist in the DB before we refetch.
     const delayMs: Record<string, number> = { blog: 22000, social: 16000, calendar: 40000 };
+    const startedAt = Date.now();
     try {
       if (type === "calendar") {
         await contentApi.generateFullCalendar(companyId);
@@ -408,6 +409,9 @@ export default function ContentPage() {
       if (c) setCalendar(c.data.weeks || []);
     } catch {
       showToast("Generation failed — ensure ANTHROPIC_API_KEY is set.");
+      // Keep the progress banner visible for at least 2 seconds even on quick failures
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 2000) await new Promise((r) => setTimeout(r, 2000 - elapsed));
     } finally {
       setGenerating(null);
     }

@@ -14,7 +14,10 @@ export default function LeadsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 4000); };
 
   async function load(status?: string) {
     setLoading(true);
@@ -35,6 +38,8 @@ export default function LeadsPage() {
       // Wait for NPPES background task before refreshing
       await new Promise((r) => setTimeout(r, 28000));
       await load(statusFilter);
+    } catch {
+      showToast("Lead generation failed — check your API configuration.");
     } finally {
       setGenerating(false);
     }
@@ -49,6 +54,11 @@ export default function LeadsPage() {
 
   return (
     <div className="p-6 max-w-6xl">
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 fade-in bg-slate-900 text-white text-sm px-4 py-3 rounded-xl shadow-lg max-w-sm">
+          {toast}
+        </div>
+      )}
       <ProgressBanner
         active={generating}
         label="Searching NPPES Registry for Provider Leads"
