@@ -129,11 +129,11 @@ export default function PaidAdsPage() {
     Promise.all([
       paidAdsApi.budgetRecs(companyId).catch(() => ({ data: { recommendations: [] } })),
       paidAdsApi.audiences(companyId).catch(() => ({ data: { audiences: [] } })),
-      approvalApi.queue(companyId, "paid_ads").catch(() => ({ data: { items: [] } })),
+      approvalApi.queue(companyId, "paid_ads").catch(() => ({ data: [] })),
     ]).then(([budget, aud, queue]) => {
       setBudgetRecs(budget.data.recommendations || []);
       setAudiences(aud.data.audiences || []);
-      setQueueItems(queue.data.items || []);
+      setQueueItems(Array.isArray(queue.data) ? queue.data : []);
     }).finally(() => setLoading(false));
   }, [companyId]);
 
@@ -152,7 +152,7 @@ export default function PaidAdsPage() {
 
   const handleGenerate = async (type: string) => {
     setGenerating(type);
-    const delayMs: Record<string, number> = { google: 20000, meta: 20000 };
+    const delayMs: Record<string, number> = { google: 45000, meta: 35000 };
     try {
       if (type === "google") await paidAdsApi.generateAllGoogle(companyId);
       else if (type === "meta") await paidAdsApi.generateAllMeta(companyId);
@@ -161,8 +161,8 @@ export default function PaidAdsPage() {
       showToast(`${plat?.name || type} ads queued for generation — check Approval Queue shortly.`);
       // Wait for background generation to complete before refetching
       await new Promise((r) => setTimeout(r, delayMs[type] ?? 20000));
-      const q = await approvalApi.queue(companyId, "paid_ads").catch(() => ({ data: { items: [] } }));
-      setQueueItems(q.data.items || []);
+      const q = await approvalApi.queue(companyId, "paid_ads").catch(() => ({ data: [] }));
+      setQueueItems(Array.isArray(q.data) ? q.data : []);
     } catch (err: any) {
       const msg = err?.isNetworkError
         ? "Cannot reach backend API — set BACKEND_URL in Railway to your backend service URL."

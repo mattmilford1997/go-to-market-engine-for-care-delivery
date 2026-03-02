@@ -385,12 +385,12 @@ export default function ContentPage() {
     // Estimated ms per type — must exceed the ProgressBanner estimatedSeconds so
     // items exist in the DB before we refetch.
     const delayMs: Record<string, number> = {
-      blog: 22000,
-      social_all: 16000,
-      social_facebook: 12000,
-      social_instagram: 12000,
-      social_linkedin: 12000,
-      calendar: 40000,
+      blog: 45000,
+      social_all: 25000,
+      social_facebook: 20000,
+      social_instagram: 20000,
+      social_linkedin: 20000,
+      calendar: 60000,
     };
     const startedAt = Date.now();
     try {
