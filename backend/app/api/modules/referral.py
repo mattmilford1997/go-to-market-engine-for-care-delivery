@@ -433,18 +433,43 @@ async def get_campaign_sequence(
 # ------------------------------------------------------------------ #
 
 async def _generate_leads_bg(company_id: str, company_data: dict, db: Session):
+    import logging
+    log = logging.getLogger(__name__)
     from app.models.referral import ReferralLead
-    leads = await generate_lead_list_for_company(company_data)
-    for lead_data in leads:
-        # Skip if NPI already exists for this company
-        existing = db.query(ReferralLead).filter(
-            ReferralLead.company_id == company_id,
-            ReferralLead.npi == lead_data["npi"],
-        ).first()
-        if not existing:
-            lead = ReferralLead(company_id=company_id, **lead_data)
-            db.add(lead)
-    db.commit()
+    try:
+        locations = company_data.get("locations", [])
+        if not locations:
+            log.warning("Lead generation skipped for company %s — no locations configured", company_id)
+            return
+        leads = await generate_lead_list_for_company(company_data)
+        if not leads:
+            log.warning(
+                "Lead generation returned 0 results for company %s. "
+                "Locations: %s, specialty: %s",
+                company_id,
+                [(loc.get("city"), loc.get("state")) for loc in locations],
+                company_data.get("specialty_niche"),
+            )
+            return
+        added = 0
+        for lead_data in leads:
+            # Skip if NPI already exists for this company
+            existing = db.query(ReferralLead).filter(
+                ReferralLead.company_id == company_id,
+                ReferralLead.npi == lead_data["npi"],
+            ).first()
+            if not existing:
+                lead = ReferralLead(company_id=company_id, **lead_data)
+                db.add(lead)
+                added += 1
+        db.commit()
+        log.info("Lead generation complete for company %s — %d leads added", company_id, added)
+    except Exception as exc:
+        log.error(
+            "Lead generation failed for company %s: %s",
+            company_id, exc, exc_info=True,
+        )
+        db.rollback()
 
 
 async def _generate_fax_sheet_bg(company_id: str, company_data: dict, target_specialty: str, db: Session):

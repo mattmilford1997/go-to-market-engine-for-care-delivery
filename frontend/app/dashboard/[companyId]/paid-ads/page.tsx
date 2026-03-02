@@ -11,6 +11,7 @@ import {
   Zap, Target, DollarSign, Clock, TrendingUp,
   RefreshCw, ChevronRight, CheckCircle, AlertCircle, Star,
 } from "lucide-react";
+import ProgressBanner from "@/components/ProgressBanner";
 
 // ─── Types ──────────────────────────────────────────────────────
 interface BudgetRec {
@@ -197,6 +198,20 @@ export default function PaidAdsPage() {
         </div>
       )}
 
+      <ProgressBanner
+        active={generating === "google"}
+        label="Generating Google Ads"
+        estimatedSeconds={20}
+        steps={["Building keyword clusters…", "Writing RSA headlines…", "Crafting ad descriptions…", "Saving to Approval Queue…"]}
+        color="orange"
+      />
+      <ProgressBanner
+        active={generating === "meta"}
+        label="Generating Meta Ads"
+        estimatedSeconds={20}
+        steps={["Defining audience segments…", "Writing ad copy…", "Crafting primary text…", "Saving to Approval Queue…"]}
+        color="orange"
+      />
       {/* Hero Header */}
       <div className="gradient-paid-ads px-8 py-7 text-white">
         <div className="flex items-start justify-between">

@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { Bot, RefreshCw, CheckCircle, Circle, ChevronDown, ChevronRight, Copy, Sparkles, TrendingUp, AlertTriangle, Zap } from "lucide-react";
 import { aeoApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import ProgressBanner from "@/components/ProgressBanner";
 
 const ENGINE_LOGOS: Record<string, { label: string; color: string; bg: string }> = {
   google_ai_overviews: { label: "Google AI Overviews", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
@@ -162,6 +163,13 @@ export default function AEOPage() {
   return (
     <div className="min-h-full">
       {toast && <div className="fixed top-4 right-4 z-50 bg-slate-900 text-white text-sm px-4 py-3 rounded-xl shadow-lg max-w-sm">{toast}</div>}
+
+      <ProgressBanner active={generatingFaqs} label="Generating FAQs" estimatedSeconds={10}
+        steps={["Researching common questions…", "Drafting answers…", "Formatting schema markup…"]} color="violet" />
+      <ProgressBanner active={generatingSchema} label="Generating Schema Markup" estimatedSeconds={10}
+        steps={["Building JSON-LD structure…", "Adding practice details…", "Validating schema…"]} color="violet" />
+      <ProgressBanner active={optimizing} label="Analysing Content for AEO" estimatedSeconds={12}
+        steps={["Parsing content…", "Identifying AEO gaps…", "Generating suggestions…"]} color="violet" />
 
       {/* Header */}
       <div className="px-8 py-7 text-white" style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #0ea5e9 100%)" }}>

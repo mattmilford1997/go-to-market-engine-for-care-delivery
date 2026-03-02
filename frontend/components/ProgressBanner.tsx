@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface ProgressBannerProps {
   active: boolean;
@@ -40,6 +40,8 @@ const COLOR_MAP = {
   },
 };
 
+const LINGER_MS = 2500;
+
 export default function ProgressBanner({
   active,
   label,
@@ -49,13 +51,14 @@ export default function ProgressBanner({
 }: ProgressBannerProps) {
   const [pct, setPct] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [shown, setShown] = useState(false);
+  const lingerTimer = useRef<ReturnType<typeof setTimeout>>();
 
+  // Run the progress ticker while active
   useEffect(() => {
-    if (!active) {
-      setPct(0);
-      setElapsed(0);
-      return;
-    }
+    if (!active) return;
+    setShown(true);
+    clearTimeout(lingerTimer.current);
     const start = Date.now();
     const id = setInterval(() => {
       const secs = (Date.now() - start) / 1000;
@@ -66,10 +69,23 @@ export default function ProgressBanner({
     return () => clearInterval(id);
   }, [active, estimatedSeconds]);
 
-  if (!active && pct === 0) return null;
+  // When active goes false, linger for LINGER_MS then hide
+  useEffect(() => {
+    if (active || !shown) return;
+    // Snap to 100% to show "done"
+    setPct(100);
+    lingerTimer.current = setTimeout(() => {
+      setShown(false);
+      setPct(0);
+      setElapsed(0);
+    }, LINGER_MS);
+    return () => clearTimeout(lingerTimer.current);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!shown) return null;
 
   const c = COLOR_MAP[color];
-  const remaining = Math.max(0, Math.round(estimatedSeconds - elapsed));
+  const remaining = active ? Math.max(0, Math.round(estimatedSeconds - elapsed)) : 0;
   const stepIndex =
     steps.length > 0
       ? Math.min(
@@ -84,24 +100,39 @@ export default function ProgressBanner({
     >
       <div className="flex items-center justify-between mb-2">
         <span className={`text-sm font-medium ${c.text} flex items-center gap-2`}>
-          <span
-            className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin inline-block shrink-0"
-            style={{ borderTopColor: "transparent" }}
-          />
-          {label}
+          {active ? (
+            <span
+              className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin inline-block shrink-0"
+              style={{ borderTopColor: "transparent" }}
+            />
+          ) : (
+            <span className="w-3 h-3 rounded-full bg-current inline-block shrink-0 opacity-70" />
+          )}
+          {active ? label : `${label} — Done`}
         </span>
         <span className="text-xs text-slate-500 tabular-nums shrink-0 ml-3">
-          {remaining > 0 ? `~${remaining}s left` : "Finishing…"}
+          {active
+            ? remaining > 0
+              ? `~${remaining}s left`
+              : "Finishing…"
+            : "Complete"}
         </span>
       </div>
       <div className="progress-track">
         <div
           className="progress-fill"
-          style={{ width: `${pct}%`, background: c.bar }}
+          style={{
+            width: `${pct}%`,
+            background: c.bar,
+            transition: active ? undefined : "width 0.4s ease",
+          }}
         />
       </div>
-      {stepIndex >= 0 && steps[stepIndex] && (
+      {active && stepIndex >= 0 && steps[stepIndex] && (
         <p className={`text-xs ${c.sub} mt-2`}>{steps[stepIndex]}</p>
+      )}
+      {!active && (
+        <p className={`text-xs ${c.sub} mt-2`}>Generation complete — check Content Studio or Approval Queue.</p>
       )}
     </div>
   );

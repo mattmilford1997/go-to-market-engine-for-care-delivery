@@ -144,58 +144,74 @@ async def update_content_item(
 async def _generate_blog_post_bg(
     company_id: str, company_data: dict, keyword: str, word_count: int, db: Session
 ):
-    post = llm_service.generate_blog_post(company_data, keyword, word_count)
-    ci = ContentItem(
-        company_id=company_id,
-        content_type=ContentType.blog_post,
-        status=ContentStatus.pending_review,
-        title=post.get("title", keyword),
-        body=post.get("body_markdown", ""),
-        target_keyword=post.get("target_keyword", keyword),
-        meta_description=post.get("meta_description", ""),
-        metadata={
-            "slug": post.get("slug", ""),
-            "secondary_keywords": post.get("secondary_keywords", []),
-            "faq_schema": post.get("faq_schema", []),
-            "word_count": post.get("estimated_word_count", word_count),
-        },
-    )
-    db.add(ci)
-    db.flush()
-    _add_approval_item(db, company_id, ci, "content", "Blog Post")
-    db.commit()
+    try:
+        post = llm_service.generate_blog_post(company_data, keyword, word_count)
+        ci = ContentItem(
+            company_id=company_id,
+            content_type=ContentType.blog_post,
+            status=ContentStatus.pending_review,
+            title=post.get("title", keyword),
+            body=post.get("body_markdown", ""),
+            target_keyword=post.get("target_keyword", keyword),
+            meta_description=post.get("meta_description", ""),
+            metadata={
+                "slug": post.get("slug", ""),
+                "secondary_keywords": post.get("secondary_keywords", []),
+                "faq_schema": post.get("faq_schema", []),
+                "word_count": post.get("estimated_word_count", word_count),
+            },
+        )
+        db.add(ci)
+        db.flush()
+        _add_approval_item(db, company_id, ci, "content", "Blog Post")
+        db.commit()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error(
+            "Blog post generation failed for company %s keyword=%r: %s",
+            company_id, keyword, exc, exc_info=True,
+        )
+        db.rollback()
 
 
 async def _generate_social_bg(
     company_id: str, company_data: dict, platform: str, count: int, db: Session
 ):
-    posts = llm_service.generate_social_posts(company_data, platform, count)
-    content_type_map = {
-        "facebook": ContentType.social_facebook,
-        "instagram": ContentType.social_instagram,
-        "linkedin": ContentType.social_linkedin,
-    }
-    ct = content_type_map.get(platform, ContentType.social_facebook)
+    try:
+        posts = llm_service.generate_social_posts(company_data, platform, count)
+        content_type_map = {
+            "facebook": ContentType.social_facebook,
+            "instagram": ContentType.social_instagram,
+            "linkedin": ContentType.social_linkedin,
+        }
+        ct = content_type_map.get(platform, ContentType.social_facebook)
 
-    for post in posts:
-        ci = ContentItem(
-            company_id=company_id,
-            content_type=ct,
-            status=ContentStatus.pending_review,
-            title=f"{platform.title()} — {post.get('type', 'post').replace('_', ' ').title()}",
-            body=post.get("caption", ""),
-            metadata={
-                "hashtags": post.get("hashtags", []),
-                "image_concept": post.get("image_concept", ""),
-                "best_days": post.get("best_days", []),
-                "best_times": post.get("best_times", []),
-                "platform": platform,
-            },
+        for post in posts:
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ct,
+                status=ContentStatus.pending_review,
+                title=f"{platform.title()} — {post.get('type', 'post').replace('_', ' ').title()}",
+                body=post.get("caption", ""),
+                metadata={
+                    "hashtags": post.get("hashtags", []),
+                    "image_concept": post.get("image_concept", ""),
+                    "best_days": post.get("best_days", []),
+                    "best_times": post.get("best_times", []),
+                    "platform": platform,
+                },
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval_item(db, company_id, ci, "content", f"{platform.title()} Post")
+        db.commit()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error(
+            "Social post generation failed for company %s platform=%s: %s",
+            company_id, platform, exc, exc_info=True,
         )
-        db.add(ci)
-        db.flush()
-        _add_approval_item(db, company_id, ci, "content", f"{platform.title()} Post")
-    db.commit()
+        db.rollback()
 
 
 async def _generate_calendar_bg(company_id: str, company_data: dict, db: Session):

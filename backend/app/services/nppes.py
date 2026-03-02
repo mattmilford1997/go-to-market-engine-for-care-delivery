@@ -60,7 +60,12 @@ async def query_nppes(
             resp.raise_for_status()
             data = resp.json()
             return data.get("results", [])
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "NPPES query failed city=%s state=%s taxonomy=%s: %s",
+                city, state, taxonomy_code, exc,
+            )
             return []
 
 

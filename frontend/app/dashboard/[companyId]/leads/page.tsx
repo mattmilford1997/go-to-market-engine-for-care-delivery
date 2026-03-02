@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { referralApi } from "@/lib/api";
 import { cn, statusColor } from "@/lib/utils";
+import ProgressBanner from "@/components/ProgressBanner";
 
 const STATUS_OPTS = ["all", "new", "contacted", "engaged", "referring", "inactive", "suppressed"];
 
@@ -29,11 +30,14 @@ export default function LeadsPage() {
 
   async function handleGenerateLeads() {
     setGenerating(true);
-    await referralApi.generateLeads(companyId);
-    setTimeout(() => {
-      load(statusFilter);
+    try {
+      await referralApi.generateLeads(companyId);
+      // Wait for NPPES background task before refreshing
+      await new Promise((r) => setTimeout(r, 28000));
+      await load(statusFilter);
+    } finally {
       setGenerating(false);
-    }, 3000);
+    }
   }
 
   async function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -45,6 +49,18 @@ export default function LeadsPage() {
 
   return (
     <div className="p-6 max-w-6xl">
+      <ProgressBanner
+        active={generating}
+        label="Searching NPPES Registry for Provider Leads"
+        estimatedSeconds={25}
+        steps={[
+          "Querying NPPES national provider registry…",
+          "Filtering by specialty and location…",
+          "Deduplicating records…",
+          "Importing provider contacts…",
+        ]}
+        color="blue"
+      />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

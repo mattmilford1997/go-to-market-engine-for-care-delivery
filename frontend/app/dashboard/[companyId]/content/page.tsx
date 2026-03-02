@@ -382,21 +382,30 @@ export default function ContentPage() {
 
   const handleGenerate = async (type: string) => {
     setGenerating(type);
+    // Estimated seconds per type — must exceed the ProgressBanner estimatedSeconds so
+    // items exist in the DB before we refetch.
+    const delayMs: Record<string, number> = { blog: 22000, social: 16000, calendar: 40000 };
     try {
       if (type === "calendar") {
         await contentApi.generateFullCalendar(companyId);
-        showToast("12-week content calendar generation started — check Approval Queue shortly.");
-        const c = await contentApi.calendar(companyId).catch(() => ({ data: { weeks: [] } }));
-        setCalendar(c.data.weeks || []);
+        showToast("12-week content calendar generation started — results will appear below.");
       } else if (type === "blog") {
         await contentApi.generateBlogPost(companyId, "mental health treatment options", 1500);
-        showToast("Blog post queued for generation.");
+        showToast("Blog post generation started — it will appear in Content Library & Approval Queue.");
       } else if (type === "social") {
         await contentApi.generateSocialPosts(companyId, "all", 3);
-        showToast("Social posts queued for generation.");
+        showToast("Social post generation started — posts will appear below shortly.");
       }
-      const i = await contentApi.items(companyId).catch(() => ({ data: { items: [] } }));
+      // Wait for the background task to finish before refetching
+      await new Promise((r) => setTimeout(r, delayMs[type] ?? 20000));
+      const [i, c] = await Promise.all([
+        contentApi.items(companyId).catch(() => ({ data: { items: [] } })),
+        type === "calendar"
+          ? contentApi.calendar(companyId).catch(() => ({ data: { weeks: [] } }))
+          : Promise.resolve(null),
+      ]);
       setItems(i.data.items || i.data || []);
+      if (c) setCalendar(c.data.weeks || []);
     } catch {
       showToast("Generation failed — ensure ANTHROPIC_API_KEY is set.");
     } finally {

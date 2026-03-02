@@ -10,12 +10,14 @@ import {
   profilesApi,
   demoApi,
 } from "@/lib/api";
+import ProgressBanner from "@/components/ProgressBanner";
 import { formatCurrency, statusColor, cn } from "@/lib/utils";
 
 export default function CompanyDashboard() {
   const { companyId } = useParams<{ companyId: string }>();
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [demoLoaded, setDemoLoaded] = useState(false);
+  const [generatingAll, setGeneratingAll] = useState(false);
 
   // Same query keys as the layout — React Query deduplicates to one request
   const { data: company, isLoading: loadingCompany } = useQuery({
@@ -59,11 +61,17 @@ export default function CompanyDashboard() {
   }
 
   async function handleGenerateAll() {
-    await Promise.allSettled([
-      referralApi.generateLeads(companyId),
-      referralApi.generateAllCollateral(companyId),
-    ]);
-    alert("Generation started! Check the Approval Queue in a few minutes.");
+    setGeneratingAll(true);
+    try {
+      await Promise.allSettled([
+        referralApi.generateLeads(companyId),
+        referralApi.generateAllCollateral(companyId),
+      ]);
+      // Wait for background tasks to finish
+      await new Promise((r) => setTimeout(r, 55000));
+    } finally {
+      setGeneratingAll(false);
+    }
   }
 
   if (loadingCompany) {
@@ -86,6 +94,19 @@ export default function CompanyDashboard() {
 
   return (
     <div className="p-6 max-w-6xl">
+      <ProgressBanner
+        active={generatingAll}
+        label="Generating Leads + Referral Collateral"
+        estimatedSeconds={50}
+        steps={[
+          "Querying NPPES provider registry…",
+          "Generating fax sheets for each specialty…",
+          "Scripting voicemail drops…",
+          "Drafting email outreach sequences…",
+          "Saving to Approval Queue…",
+        ]}
+        color="blue"
+      />
       {!demoLoaded && (
         <div className="mb-6 rounded-xl p-4 flex items-center gap-4 border border-indigo-200" style={{ background: "linear-gradient(135deg, #eef2ff, #e0f2fe)" }}>
           <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">

@@ -8,6 +8,7 @@ import {
   Zap, MapPin, Shield, Camera, ChevronRight, ExternalLink,
   Clock, XCircle,
 } from "lucide-react";
+import ProgressBanner from "@/components/ProgressBanner";
 
 // ─── Types ──────────────────────────────────────────────────────
 interface PlatformCard {
@@ -330,6 +331,14 @@ export default function ProfilesPage() {
           {toast}
         </div>
       )}
+
+      <ProgressBanner
+        active={!!generating}
+        label={generating === "all" ? "Generating Content for All Platforms" : `Generating Profile Content`}
+        estimatedSeconds={18}
+        steps={["Crafting bio copy…", "Writing service descriptions…", "Formatting for platform…", "Saving to Approval Queue…"]}
+        color="blue"
+      />
 
       {/* Hero Header */}
       <div className="gradient-profiles px-8 py-7 text-white">
