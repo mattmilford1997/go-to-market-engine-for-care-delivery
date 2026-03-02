@@ -21,7 +21,22 @@ export default function Home() {
       });
       router.push(`/dashboard/${res.data.id}`);
     } catch (err: any) {
-      const detail = err?.response?.data?.detail;
+      const detail = err?.response?.data?.detail ?? "";
+      if (typeof detail === "string" && detail.toLowerCase().includes("already exists")) {
+        try {
+          const list = await companiesApi.list();
+          const fullUrl = url.startsWith("http") ? url : `https://${url}`;
+          const existing = list.data.find(
+            (c: any) => c.website_url === fullUrl || c.website_url === fullUrl.replace(/\/$/, "")
+          );
+          if (existing) {
+            router.push(`/dashboard/${existing.id}`);
+            return;
+          }
+        } catch {
+          // fall through to generic error
+        }
+      }
       const status = err?.response?.status;
       const msg = err?.message;
       setError(detail || (status ? `Error ${status}` : msg || "Failed to start onboarding"));
