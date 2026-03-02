@@ -52,7 +52,7 @@ export default function ProgressBanner({
   const [pct, setPct] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [shown, setShown] = useState(false);
-  const lingerTimer = useRef<ReturnType<typeof setTimeout>>();
+  const lingerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Run the progress ticker while active
   useEffect(() => {
