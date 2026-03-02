@@ -382,9 +382,16 @@ export default function ContentPage() {
 
   const handleGenerate = async (type: string) => {
     setGenerating(type);
-    // Estimated seconds per type — must exceed the ProgressBanner estimatedSeconds so
+    // Estimated ms per type — must exceed the ProgressBanner estimatedSeconds so
     // items exist in the DB before we refetch.
-    const delayMs: Record<string, number> = { blog: 22000, social: 16000, calendar: 40000 };
+    const delayMs: Record<string, number> = {
+      blog: 22000,
+      social_all: 16000,
+      social_facebook: 12000,
+      social_instagram: 12000,
+      social_linkedin: 12000,
+      calendar: 40000,
+    };
     const startedAt = Date.now();
     try {
       if (type === "calendar") {
@@ -393,9 +400,13 @@ export default function ContentPage() {
       } else if (type === "blog") {
         await contentApi.generateBlogPost(companyId, "mental health treatment options", 1500);
         showToast("Blog post generation started — it will appear in Content Library & Approval Queue.");
-      } else if (type === "social") {
+      } else if (type === "social_all") {
         await contentApi.generateSocialPosts(companyId, "all", 3);
-        showToast("Social post generation started — posts will appear below shortly.");
+        showToast("Social post generation started (all platforms) — posts will appear below shortly.");
+      } else if (type.startsWith("social_")) {
+        const platform = type.replace("social_", "");
+        await contentApi.generateSocialPosts(companyId, platform, 5);
+        showToast(`${platform.charAt(0).toUpperCase() + platform.slice(1)} posts generation started — posts will appear below shortly.`);
       }
       // Wait for the background task to finish before refetching
       await new Promise((r) => setTimeout(r, delayMs[type] ?? 20000));
@@ -478,38 +489,52 @@ export default function ContentPage() {
             <h1 className="text-2xl font-bold">Content Studio</h1>
             <p className="text-violet-100 text-sm mt-1">Blog posts · Social media · 12-week editorial calendar</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={loadDemoData}
-              className="flex items-center gap-2 px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
-            >
-              <Zap className="w-4 h-4" />
-              Load Demo
-            </button>
-            <button
-              onClick={() => handleGenerate("blog")}
-              disabled={!!generating}
-              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
-            >
-              {generating === "blog" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-              New Blog Post
-            </button>
-            <button
-              onClick={() => handleGenerate("social")}
-              disabled={!!generating}
-              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
-            >
-              {generating === "social" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Instagram className="w-4 h-4" />}
-              Social Posts
-            </button>
-            <button
-              onClick={() => handleGenerate("calendar")}
-              disabled={!!generating}
-              className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
-            >
-              {generating === "calendar" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-              12-Week Calendar
-            </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={loadDemoData}
+                className="flex items-center gap-2 px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-sm font-medium transition-all border border-white/30"
+              >
+                <Zap className="w-4 h-4" />
+                Load Demo
+              </button>
+              <button
+                onClick={() => handleGenerate("blog")}
+                disabled={!!generating}
+                className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              >
+                {generating === "blog" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+                New Blog Post
+              </button>
+              <button
+                onClick={() => handleGenerate("calendar")}
+                disabled={!!generating}
+                className="flex items-center gap-2 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-sm font-medium transition-all border border-white/20 disabled:opacity-50"
+              >
+                {generating === "calendar" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                12-Week Calendar
+              </button>
+            </div>
+            {/* Per-platform social post generation */}
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-xs text-white/50 self-center mr-1">Social:</span>
+              {[
+                { key: "social_facebook", icon: <Facebook className="w-3 h-3" />, label: "Facebook" },
+                { key: "social_instagram", icon: <Instagram className="w-3 h-3" />, label: "Instagram" },
+                { key: "social_linkedin", icon: <Linkedin className="w-3 h-3" />, label: "LinkedIn" },
+                { key: "social_all", icon: <Zap className="w-3 h-3" />, label: "All Platforms" },
+              ].map(({ key, icon, label }) => (
+                <button
+                  key={key}
+                  onClick={() => handleGenerate(key)}
+                  disabled={!!generating}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-all border border-white/15 disabled:opacity-50"
+                >
+                  {generating === key ? <RefreshCw className="w-3 h-3 animate-spin" /> : icon}
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -522,9 +547,30 @@ export default function ContentPage() {
         color="violet"
       />
       <ProgressBanner
-        active={generating === "social"}
-        label="Generating Social Posts"
-        estimatedSeconds={12}
+        active={generating === "social_facebook"}
+        label="Generating Facebook Posts"
+        estimatedSeconds={10}
+        steps={["Crafting Facebook captions…", "Adding hashtags…", "Scheduling best times…"]}
+        color="violet"
+      />
+      <ProgressBanner
+        active={generating === "social_instagram"}
+        label="Generating Instagram Posts"
+        estimatedSeconds={10}
+        steps={["Writing Instagram captions…", "Adding hashtags…", "Planning visual concepts…"]}
+        color="violet"
+      />
+      <ProgressBanner
+        active={generating === "social_linkedin"}
+        label="Generating LinkedIn Posts"
+        estimatedSeconds={10}
+        steps={["Drafting LinkedIn content…", "Optimising for B2B tone…", "Adding engagement hooks…"]}
+        color="violet"
+      />
+      <ProgressBanner
+        active={generating === "social_all"}
+        label="Generating Social Posts (All Platforms)"
+        estimatedSeconds={14}
         steps={["Crafting Facebook captions…", "Writing Instagram posts…", "Drafting LinkedIn content…"]}
         color="violet"
       />
