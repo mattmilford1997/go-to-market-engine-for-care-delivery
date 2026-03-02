@@ -426,74 +426,131 @@ async def generate_pinterest_ads(
 # Platform-specific background generator
 # ------------------------------------------------------------------ #
 
+# Per-platform JSON prompt templates.  {name} and {niche} are substituted at runtime.
+# Each prompt asks the LLM to return {"ads": [...]} with platform-specific fields.
 PLATFORM_PROMPTS = {
     "reddit": (
-        "Write 3 Reddit Promoted Posts for a {niche} clinic called {name}. "
-        "Tone: genuine, non-salesy, community-first — Reddit users hate obvious ads. "
+        "You are a Reddit ads specialist for healthcare. "
+        "Generate 3 Reddit Promoted Posts for {name}, a {niche} clinic. "
+        "Tone: genuine, non-salesy, community-first — Reddit users flag obvious ads immediately. "
         "Target subreddits: r/depression, r/anxiety, r/mentalhealth, r/TMS. "
-        "Each post: title (Reddit post style), body (2–3 paragraphs), CTA. "
-        "Include a native-feeling hook that adds value before mentioning the clinic."
+        "Return ONLY valid JSON (no markdown fences): "
+        '{"ads": [{"title": "Reddit-style post title", "body": "2-3 paragraph body that leads with genuine value before mentioning the clinic", "cta": "soft call to action", "subreddit": "r/..."}]}'
     ),
     "microsoft": (
-        "Write 3 Microsoft/Bing Responsive Search Ads for a {niche} clinic called {name}. "
-        "Audience skews older (45+), higher income. "
-        "Each ad: 3 headlines (30 chars max), 2 descriptions (90 chars max), 2 sitelink extensions. "
-        "Focus on insurance coverage, credentials, and proven results."
+        "You are a Microsoft Advertising specialist for healthcare. "
+        "Generate 3 Bing Responsive Search Ads for {name}, a {niche} clinic. "
+        "Audience: 45+ adults, higher income, insurance-focused. "
+        "Strict character limits: headlines ≤30 chars, descriptions ≤90 chars. "
+        "Return ONLY valid JSON: "
+        '{"ads": [{"headline_1": "≤30 chars", "headline_2": "≤30 chars", "headline_3": "≤30 chars", '
+        '"description_1": "≤90 chars", "description_2": "≤90 chars", '
+        '"sitelinks": [{"text": "sitelink label", "description": "one line"}]}]}'
     ),
     "quora": (
-        "Write 3 Quora Promoted Answer Ads for a {niche} clinic called {name}. "
-        "Format: answer to a question a patient would ask (e.g., 'What is TMS therapy?'). "
-        "First 2–3 sentences must genuinely answer the question before softly mentioning the clinic. "
-        "Each: question, answer body (4–6 sentences), CTA."
+        "You are a Quora Ads specialist for healthcare. "
+        "Generate 3 Quora Promoted Answer Ads for {name}, a {niche} clinic. "
+        "Each answer must genuinely address the patient question in the first 2 sentences before softly referencing the clinic. "
+        "Return ONLY valid JSON: "
+        '{"ads": [{"question": "question a patient would search on Quora", '
+        '"answer": "4-6 sentence answer that leads with genuine info, then softly mentions the clinic", '
+        '"cta": "call to action text"}]}'
     ),
     "tiktok": (
-        "Write 3 TikTok In-Feed Video Ad scripts for a {niche} clinic called {name}. "
-        "15–30 seconds. Gen Z / Millennial tone. Hook in first 2 seconds. "
-        "Include: hook line, on-screen text (3–5 overlays), voiceover script, hashtag suggestions. "
-        "Sound-off friendly — key message readable without audio."
+        "You are a TikTok Ads specialist for healthcare. "
+        "Generate 3 TikTok In-Feed Video Ad scripts for {name}, a {niche} clinic. "
+        "15-30 seconds. Gen Z / Millennial tone. Sound-off friendly. Hook within 2 seconds. "
+        "Return ONLY valid JSON: "
+        '{"ads": [{"hook": "attention-grabbing first 2 seconds", '
+        '"voiceover": "full 15-30 second voiceover script", '
+        '"on_screen_text": ["overlay 1", "overlay 2", "overlay 3", "overlay 4"], '
+        '"hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"], '
+        '"cta": "end-card call to action"}]}'
     ),
     "linkedin": (
-        "Write 3 LinkedIn Sponsored Content ads for a {niche} clinic called {name}. "
+        "You are a LinkedIn Ads specialist for B2B healthcare marketing. "
+        "Generate 3 LinkedIn Sponsored Content ads for {name}, a {niche} clinic. "
         "Target: PCPs, therapists, HR managers, EAP coordinators. "
-        "Professional tone but warm. Focus on referral partnerships and patient outcomes. "
-        "Each: headline (150 chars), intro text (600 chars), CTA button label."
+        "Professional but warm. Focus on referral partnerships and patient outcomes. "
+        "Return ONLY valid JSON: "
+        '{"ads": [{"headline": "≤150 chars", "intro_text": "≤600 chars compelling intro", '
+        '"cta_label": "Learn More|Contact Us|Get Started|Download"}]}'
     ),
     "pinterest": (
-        "Write 3 Pinterest Promoted Pin descriptions for a {niche} clinic called {name}. "
-        "Target: women 25–54 interested in wellness, mental health, self-care. "
-        "Warm, aspirational tone. Each: pin title (100 chars), description (500 chars), "
-        "suggested image description, 5 relevant hashtags."
+        "You are a Pinterest Ads specialist for healthcare and wellness brands. "
+        "Generate 3 Pinterest Promoted Pin ads for {name}, a {niche} clinic. "
+        "Target: women 25-54 interested in wellness, mental health, self-care. Warm, aspirational tone. "
+        "Return ONLY valid JSON: "
+        '{"ads": [{"title": "≤100 chars", "description": "≤500 chars warm description", '
+        '"image_concept": "visual concept for the pin image", '
+        '"hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]}]}'
     ),
+}
+
+# Human-readable field used as the body preview in the approval queue per platform
+_PLATFORM_BODY_FIELD = {
+    "reddit": "body",
+    "microsoft": "description_1",
+    "quora": "answer",
+    "tiktok": "voiceover",
+    "linkedin": "intro_text",
+    "pinterest": "description",
+}
+
+# Ad title templates per platform
+_PLATFORM_AD_TITLE = {
+    "reddit": lambda ad, name, i: ad.get("title", f"Reddit Ad #{i} — {name}"),
+    "microsoft": lambda ad, name, i: f"Bing RSA #{i} — {ad.get('headline_1', name)}",
+    "quora": lambda ad, name, i: ad.get("question", f"Quora Ad #{i} — {name}"),
+    "tiktok": lambda ad, name, i: f"TikTok Script #{i} — {ad.get('hook', name)}",
+    "linkedin": lambda ad, name, i: ad.get("headline", f"LinkedIn Ad #{i} — {name}"),
+    "pinterest": lambda ad, name, i: ad.get("title", f"Pinterest Pin #{i} — {name}"),
 }
 
 
 async def _generate_platform_ads_bg(company_id: str, company_data: dict, platform: str, db: Session):
     name = company_data.get("company_name", "our clinic")
     niche = company_data.get("specialty_niche", "behavioral health")
-    prompt_template = PLATFORM_PROMPTS.get(platform, "Write 3 ads for {name}, a {niche} clinic.")
-    prompt = prompt_template.format(name=name, niche=niche)
 
+    prompt = PLATFORM_PROMPTS.get(
+        platform,
+        'Generate 3 ads for {name}, a {niche} clinic. Return JSON: {"ads": [{"title": "...", "body": "..."}]}',
+    ).format(name=name, niche=niche)
+
+    ads: list = []
     try:
-        result = llm_service.client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        body = result.content[0].text
+        result = llm_service._chat_json(prompt, max_tokens=2500)
+        if isinstance(result, dict) and "ads" in result:
+            ads = result["ads"]
+        elif isinstance(result, list):
+            ads = result
     except Exception:
-        body = f"[{platform.title()} ads pending — connect ANTHROPIC_API_KEY to generate]"
+        pass
 
-    ci = ContentItem(
-        company_id=company_id,
-        content_type=ContentType.ad_copy_google,  # reuse existing type
-        status=ContentStatus.pending_review,
-        title=f"{platform.title()} Ads — {name}",
-        body=body,
-        extra_data={"platform": platform, "type": f"{platform}_ad_copy", "company": name},
-    )
-    db.add(ci)
-    db.flush()
-    _add_approval(db, company_id, ci, "paid_ads", f"{platform}_ad_copy")
+    # Fallback: create one placeholder item if LLM failed
+    if not ads:
+        ads = [{"title": f"{platform.title()} Ad — {name}", "body": f"[{platform.title()} ads pending — connect ANTHROPIC_API_KEY]"}]
+
+    body_field = _PLATFORM_BODY_FIELD.get(platform, "body")
+    title_fn = _PLATFORM_AD_TITLE.get(platform, lambda ad, n, i: ad.get("title", f"{platform.title()} Ad #{i} — {n}"))
+
+    for i, ad in enumerate(ads[:5], start=1):
+        body_text = ad.get(body_field) or ad.get("body") or ad.get("answer") or ad.get("voiceover") or str(ad)
+        ad_title = title_fn(ad, name, i)
+        ci = ContentItem(
+            company_id=company_id,
+            content_type=ContentType.ad_copy_google,
+            status=ContentStatus.pending_review,
+            title=str(ad_title)[:500],
+            body=body_text,
+            # Spread full ad dict so all platform fields are in preview_data.
+            # Always include "body" so the frontend preview works regardless of platform.
+            extra_data={**ad, "platform": platform, "body": body_text},
+        )
+        db.add(ci)
+        db.flush()
+        _add_approval(db, company_id, ci, "paid_ads", f"{platform}_ad_copy")
+
     db.commit()
 
 
