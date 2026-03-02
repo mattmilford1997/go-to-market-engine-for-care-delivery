@@ -1,13 +1,17 @@
 """Module 1: Paid Ads Optimizer — Google, Meta, Reddit, Microsoft, Quora, TikTok, LinkedIn, Pinterest."""
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.db.database import get_db
+from app.db.database import get_db, SessionLocal
 from app.models.company import Company
 from app.models.content import ContentItem, ApprovalItem, ContentType, ContentStatus
 from app.models.referral import Campaign
 from app.services.llm import llm_service
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/paid-ads", tags=["paid_ads"])
 
@@ -131,7 +135,7 @@ async def generate_keywords(
 ):
     company = _get_company(company_id, db)
     background_tasks.add_task(
-        _generate_keyword_clusters_bg, company_id, _company_data(company), db
+        _generate_keyword_clusters_bg, company_id, _company_data(company)
     )
     return {"status": "generating"}
 
@@ -149,7 +153,7 @@ async def generate_google_ad_copy(
     if not cluster:
         raise HTTPException(status_code=400, detail="cluster required")
     background_tasks.add_task(
-        _generate_google_copy_bg, company_id, _company_data(company), cluster, db
+        _generate_google_copy_bg, company_id, _company_data(company), cluster
     )
     return {"status": "generating"}
 
@@ -163,7 +167,7 @@ async def generate_all_google_ads(
     """Generate keyword clusters + ad copy for each cluster."""
     company = _get_company(company_id, db)
     background_tasks.add_task(
-        _generate_all_google_bg, company_id, _company_data(company), db
+        _generate_all_google_bg, company_id, _company_data(company)
     )
     return {"status": "generating"}
 
@@ -189,7 +193,7 @@ async def generate_meta_ad_copy(
     company = _get_company(company_id, db)
     audience = payload.get("audience", META_AUDIENCE_TEMPLATES[0])
     background_tasks.add_task(
-        _generate_meta_copy_bg, company_id, _company_data(company), audience, db
+        _generate_meta_copy_bg, company_id, _company_data(company), audience
     )
     return {"status": "generating"}
 
@@ -204,7 +208,7 @@ async def generate_all_meta_ads(
     company = _get_company(company_id, db)
     for audience in META_AUDIENCE_TEMPLATES:
         background_tasks.add_task(
-            _generate_meta_copy_bg, company_id, _company_data(company), audience, db
+            _generate_meta_copy_bg, company_id, _company_data(company), audience
         )
     return {"status": "generating", "audience_count": len(META_AUDIENCE_TEMPLATES)}
 
@@ -255,60 +259,112 @@ async def budget_recommendations(company_id: str, db: Session = Depends(get_db))
 # Background Tasks
 # ------------------------------------------------------------------ #
 
-async def _generate_keyword_clusters_bg(company_id: str, company_data: dict, db: Session):
-    clusters = llm_service.generate_keyword_clusters(company_data)
-    ci = ContentItem(
-        company_id=company_id,
-        content_type=ContentType.ad_copy_google,
-        status=ContentStatus.pending_review,
-        title="Google Ads Keyword Clusters",
-        body=f"{len(clusters)} keyword clusters generated",
-        extra_data={"clusters": clusters, "type": "keyword_research"},
-    )
-    db.add(ci)
-    db.flush()
-    _add_approval(db, company_id, ci, "paid_ads", "keyword_clusters")
-    db.commit()
-    return clusters
+async def _generate_keyword_clusters_bg(company_id: str, company_data: dict):
+    db = SessionLocal()
+    try:
+        clusters = llm_service.generate_keyword_clusters(company_data)
+        ci = ContentItem(
+            company_id=company_id,
+            content_type=ContentType.ad_copy_google,
+            status=ContentStatus.pending_review,
+            title="Google Ads Keyword Clusters",
+            body=f"{len(clusters)} keyword clusters generated",
+            extra_data={"clusters": clusters, "type": "keyword_research"},
+        )
+        db.add(ci)
+        db.flush()
+        _add_approval(db, company_id, ci, "paid_ads", "keyword_clusters")
+        db.commit()
+        return clusters
+    except Exception as exc:
+        log.error("Keyword clusters generation failed: %s", exc, exc_info=True)
+        db.rollback()
+        return []
+    finally:
+        db.close()
 
 
-async def _generate_google_copy_bg(company_id: str, company_data: dict, cluster: dict, db: Session):
-    copy = llm_service.generate_google_ad_copy(company_data, cluster)
-    ci = ContentItem(
-        company_id=company_id,
-        content_type=ContentType.ad_copy_google,
-        status=ContentStatus.pending_review,
-        title=f"Google RSA — {cluster.get('cluster_name', 'Ad Group')}",
-        body="\n".join(copy.get("headlines", [])),
-        extra_data={**copy, "cluster": cluster},
-    )
-    db.add(ci)
-    db.flush()
-    _add_approval(db, company_id, ci, "paid_ads", "google_ad_copy")
-    db.commit()
+async def _generate_google_copy_bg(company_id: str, company_data: dict, cluster: dict):
+    db = SessionLocal()
+    try:
+        copy = llm_service.generate_google_ad_copy(company_data, cluster)
+        ci = ContentItem(
+            company_id=company_id,
+            content_type=ContentType.ad_copy_google,
+            status=ContentStatus.pending_review,
+            title=f"Google RSA — {cluster.get('cluster_name', 'Ad Group')}",
+            body="\n".join(copy.get("headlines", [])),
+            extra_data={**copy, "cluster": cluster},
+        )
+        db.add(ci)
+        db.flush()
+        _add_approval(db, company_id, ci, "paid_ads", "google_ad_copy")
+        db.commit()
+    except Exception as exc:
+        log.error("Google ad copy generation failed: %s", exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
 
 
-async def _generate_all_google_bg(company_id: str, company_data: dict, db: Session):
-    clusters = await _generate_keyword_clusters_bg(company_id, company_data, db)
-    if isinstance(clusters, list):
-        for cluster in clusters[:6]:  # generate copy for first 6 clusters
-            await _generate_google_copy_bg(company_id, company_data, cluster, db)
+async def _generate_all_google_bg(company_id: str, company_data: dict):
+    db = SessionLocal()
+    try:
+        clusters = llm_service.generate_keyword_clusters(company_data)
+        ci = ContentItem(
+            company_id=company_id,
+            content_type=ContentType.ad_copy_google,
+            status=ContentStatus.pending_review,
+            title="Google Ads Keyword Clusters",
+            body=f"{len(clusters)} keyword clusters generated",
+            extra_data={"clusters": clusters, "type": "keyword_research"},
+        )
+        db.add(ci)
+        db.flush()
+        _add_approval(db, company_id, ci, "paid_ads", "keyword_clusters")
+        if isinstance(clusters, list):
+            for cluster in clusters[:6]:
+                copy = llm_service.generate_google_ad_copy(company_data, cluster)
+                copy_ci = ContentItem(
+                    company_id=company_id,
+                    content_type=ContentType.ad_copy_google,
+                    status=ContentStatus.pending_review,
+                    title=f"Google RSA — {cluster.get('cluster_name', 'Ad Group')}",
+                    body="\n".join(copy.get("headlines", [])),
+                    extra_data={**copy, "cluster": cluster},
+                )
+                db.add(copy_ci)
+                db.flush()
+                _add_approval(db, company_id, copy_ci, "paid_ads", "google_ad_copy")
+        db.commit()
+    except Exception as exc:
+        log.error("Generate all Google ads failed: %s", exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
 
 
-async def _generate_meta_copy_bg(company_id: str, company_data: dict, audience: dict, db: Session):
-    copy = llm_service.generate_meta_ad_copy(company_data, audience)
-    ci = ContentItem(
-        company_id=company_id,
-        content_type=ContentType.ad_copy_meta,
-        status=ContentStatus.pending_review,
-        title=f"Meta Ad — {audience.get('name', 'Audience')}",
-        body=copy.get("primary_text", ""),
-        extra_data={**copy, "audience": audience},
-    )
-    db.add(ci)
-    db.flush()
-    _add_approval(db, company_id, ci, "paid_ads", "meta_ad_creative")
-    db.commit()
+async def _generate_meta_copy_bg(company_id: str, company_data: dict, audience: dict):
+    db = SessionLocal()
+    try:
+        copy = llm_service.generate_meta_ad_copy(company_data, audience)
+        ci = ContentItem(
+            company_id=company_id,
+            content_type=ContentType.ad_copy_meta,
+            status=ContentStatus.pending_review,
+            title=f"Meta Ad — {audience.get('name', 'Audience')}",
+            body=copy.get("primary_text", ""),
+            extra_data={**copy, "audience": audience},
+        )
+        db.add(ci)
+        db.flush()
+        _add_approval(db, company_id, ci, "paid_ads", "meta_ad_creative")
+        db.commit()
+    except Exception as exc:
+        log.error("Meta ad copy generation failed: %s", exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
 
 
 def _add_approval(db, company_id, content_item, module, type_label):
@@ -343,7 +399,7 @@ async def generate_reddit_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "reddit", db)
+    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "reddit")
     return {"status": "generating", "platform": "reddit"}
 
 
@@ -358,7 +414,7 @@ async def generate_microsoft_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "microsoft", db)
+    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "microsoft")
     return {"status": "generating", "platform": "microsoft"}
 
 
@@ -373,7 +429,7 @@ async def generate_quora_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "quora", db)
+    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "quora")
     return {"status": "generating", "platform": "quora"}
 
 
@@ -388,7 +444,7 @@ async def generate_tiktok_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "tiktok", db)
+    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "tiktok")
     return {"status": "generating", "platform": "tiktok"}
 
 
@@ -403,7 +459,7 @@ async def generate_linkedin_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "linkedin", db)
+    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "linkedin")
     return {"status": "generating", "platform": "linkedin"}
 
 
@@ -418,7 +474,7 @@ async def generate_pinterest_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "pinterest", db)
+    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "pinterest")
     return {"status": "generating", "platform": "pinterest"}
 
 
@@ -508,7 +564,8 @@ _PLATFORM_AD_TITLE = {
 }
 
 
-async def _generate_platform_ads_bg(company_id: str, company_data: dict, platform: str, db: Session):
+async def _generate_platform_ads_bg(company_id: str, company_data: dict, platform: str):
+    db = SessionLocal()
     name = company_data.get("company_name", "our clinic")
     niche = company_data.get("specialty_niche", "behavioral health")
 
@@ -540,24 +597,30 @@ async def _generate_platform_ads_bg(company_id: str, company_data: dict, platfor
     body_field = _PLATFORM_BODY_FIELD.get(platform, "body")
     title_fn = _PLATFORM_AD_TITLE.get(platform, lambda ad, n, i: ad.get("title", f"{platform.title()} Ad #{i} — {n}"))
 
-    for i, ad in enumerate(ads[:5], start=1):
-        body_text = ad.get(body_field) or ad.get("body") or ad.get("answer") or ad.get("voiceover") or str(ad)
-        ad_title = title_fn(ad, name, i)
-        ci = ContentItem(
-            company_id=company_id,
-            content_type=ContentType.ad_copy_google,
-            status=ContentStatus.pending_review,
-            title=str(ad_title)[:500],
-            body=body_text,
-            # Spread full ad dict so all platform fields are in preview_data.
-            # Always include "body" so the frontend preview works regardless of platform.
-            extra_data={**ad, "platform": platform, "body": body_text},
-        )
-        db.add(ci)
-        db.flush()
-        _add_approval(db, company_id, ci, "paid_ads", f"{platform}_ad_copy")
+    try:
+        for i, ad in enumerate(ads[:5], start=1):
+            body_text = ad.get(body_field) or ad.get("body") or ad.get("answer") or ad.get("voiceover") or str(ad)
+            ad_title = title_fn(ad, name, i)
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=str(ad_title)[:500],
+                body=body_text,
+                # Spread full ad dict so all platform fields are in preview_data.
+                # Always include "body" so the frontend preview works regardless of platform.
+                extra_data={**ad, "platform": platform, "body": body_text},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", f"{platform}_ad_copy")
 
-    db.commit()
+        db.commit()
+    except Exception as exc:
+        log.error("Platform ads DB save failed for %s: %s", platform, exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
 
 
 def _get_company(company_id: str, db: Session) -> Company:

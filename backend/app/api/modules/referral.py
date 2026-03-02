@@ -11,7 +11,11 @@ import io
 import re
 import uuid
 
-from app.db.database import get_db
+import logging
+
+from app.db.database import get_db, SessionLocal
+
+log = logging.getLogger(__name__)
 from app.models.company import Company
 from app.models.referral import ReferralLead, Touchpoint, Campaign, CampaignEnrollment, LeadStatus
 from app.models.content import ApprovalItem, ContentItem, ContentType, ContentStatus
@@ -144,7 +148,7 @@ async def generate_leads(
 ):
     """Auto-generate lead list from NPPES for this company's locations + specialty."""
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_leads_bg, company_id, company.dict_data(), db)
+    background_tasks.add_task(_generate_leads_bg, company_id, company.dict_data())
     return {"status": "generating", "message": "Lead generation started via NPPES"}
 
 
@@ -299,7 +303,7 @@ async def generate_fax_sheet(
     company = _get_company(company_id, db)
     target_specialty = payload.get("target_specialty", "primary care physician")
     background_tasks.add_task(
-        _generate_fax_sheet_bg, company_id, company.dict_data(), target_specialty, db
+        _generate_fax_sheet_bg, company_id, company.dict_data(), target_specialty
     )
     return {"status": "generating"}
 
@@ -314,7 +318,7 @@ async def generate_voicemail_scripts(
     company = _get_company(company_id, db)
     target_specialty = payload.get("target_specialty", "primary care physician")
     background_tasks.add_task(
-        _generate_voicemail_bg, company_id, company.dict_data(), target_specialty, db
+        _generate_voicemail_bg, company_id, company.dict_data(), target_specialty
     )
     return {"status": "generating"}
 
@@ -329,7 +333,7 @@ async def generate_email_sequence(
     company = _get_company(company_id, db)
     target_specialty = payload.get("target_specialty", "primary care physician")
     background_tasks.add_task(
-        _generate_email_sequence_bg, company_id, company.dict_data(), target_specialty, db
+        _generate_email_sequence_bg, company_id, company.dict_data(), target_specialty
     )
     return {"status": "generating"}
 
@@ -341,7 +345,7 @@ async def generate_postcard(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_postcard_bg, company_id, company.dict_data(), db)
+    background_tasks.add_task(_generate_postcard_bg, company_id, company.dict_data())
     return {"status": "generating"}
 
 
@@ -356,10 +360,10 @@ async def generate_all_collateral(
     company_data = company.dict_data()
     specialties = ["primary care physician", "therapist / counselor", "neurologist", "OB/GYN"]
     for specialty in specialties:
-        background_tasks.add_task(_generate_fax_sheet_bg, company_id, company_data, specialty, db)
-        background_tasks.add_task(_generate_voicemail_bg, company_id, company_data, specialty, db)
-    background_tasks.add_task(_generate_email_sequence_bg, company_id, company_data, "primary care physician", db)
-    background_tasks.add_task(_generate_postcard_bg, company_id, company_data, db)
+        background_tasks.add_task(_generate_fax_sheet_bg, company_id, company_data, specialty)
+        background_tasks.add_task(_generate_voicemail_bg, company_id, company_data, specialty)
+    background_tasks.add_task(_generate_email_sequence_bg, company_id, company_data, "primary care physician")
+    background_tasks.add_task(_generate_postcard_bg, company_id, company_data)
     return {"status": "generating", "tasks": 4 * 2 + 2}
 
 
@@ -432,10 +436,9 @@ async def get_campaign_sequence(
 # Background Tasks
 # ------------------------------------------------------------------ #
 
-async def _generate_leads_bg(company_id: str, company_data: dict, db: Session):
-    import logging
-    log = logging.getLogger(__name__)
+async def _generate_leads_bg(company_id: str, company_data: dict):
     from app.models.referral import ReferralLead
+    db = SessionLocal()
     try:
         locations = company_data.get("locations", [])
         if not locations:
@@ -470,71 +473,101 @@ async def _generate_leads_bg(company_id: str, company_data: dict, db: Session):
             company_id, exc, exc_info=True,
         )
         db.rollback()
+    finally:
+        db.close()
 
 
-async def _generate_fax_sheet_bg(company_id: str, company_data: dict, target_specialty: str, db: Session):
-    content = llm_service.generate_fax_sheet_content(company_data, target_specialty)
-    ci = ContentItem(
-        company_id=company_id,
-        content_type=ContentType.fax_sheet,
-        status=ContentStatus.pending_review,
-        title=f"Referral Fax Sheet — {target_specialty.title()}",
-        body=content.get("intro_paragraph", ""),
-        extra_data={**content, "target_specialty": target_specialty},
-    )
-    db.add(ci)
-    db.flush()
-    _add_to_approval_queue(db, company_id, ci, "referral", "Fax Sheet")
-    db.commit()
-
-
-async def _generate_voicemail_bg(company_id: str, company_data: dict, target_specialty: str, db: Session):
-    scripts = llm_service.generate_voicemail_scripts(company_data, target_specialty)
-    for script in scripts:
+async def _generate_fax_sheet_bg(company_id: str, company_data: dict, target_specialty: str):
+    db = SessionLocal()
+    try:
+        content = llm_service.generate_fax_sheet_content(company_data, target_specialty)
         ci = ContentItem(
             company_id=company_id,
-            content_type=ContentType.voicemail_script,
+            content_type=ContentType.fax_sheet,
             status=ContentStatus.pending_review,
-            title=f"Voicemail Script v{script.get('variant', 1)} — {target_specialty.title()}",
-            body=script.get("script", ""),
-            metadata=script,
+            title=f"Referral Fax Sheet — {target_specialty.title()}",
+            body=content.get("intro_paragraph", ""),
+            extra_data={**content, "target_specialty": target_specialty},
         )
         db.add(ci)
         db.flush()
-        _add_to_approval_queue(db, company_id, ci, "referral", "Voicemail Script")
-    db.commit()
+        _add_to_approval_queue(db, company_id, ci, "referral", "Fax Sheet")
+        db.commit()
+    except Exception as exc:
+        log.error("Fax sheet generation failed: %s", exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
 
 
-async def _generate_email_sequence_bg(company_id: str, company_data: dict, target_specialty: str, db: Session):
-    emails = llm_service.generate_email_sequence(company_data, target_specialty)
-    ci = ContentItem(
-        company_id=company_id,
-        content_type=ContentType.email_sequence,
-        status=ContentStatus.pending_review,
-        title=f"Email Sequence — {target_specialty.title()} (7 emails)",
-        body=emails[0].get("body", "") if emails else "",
-        extra_data={"emails": emails, "target_specialty": target_specialty},
-    )
-    db.add(ci)
-    db.flush()
-    _add_to_approval_queue(db, company_id, ci, "referral", "Email Sequence")
-    db.commit()
+async def _generate_voicemail_bg(company_id: str, company_data: dict, target_specialty: str):
+    db = SessionLocal()
+    try:
+        scripts = llm_service.generate_voicemail_scripts(company_data, target_specialty)
+        for script in scripts:
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.voicemail_script,
+                status=ContentStatus.pending_review,
+                title=f"Voicemail Script v{script.get('variant', 1)} — {target_specialty.title()}",
+                body=script.get("script", ""),
+                extra_data=script,
+            )
+            db.add(ci)
+            db.flush()
+            _add_to_approval_queue(db, company_id, ci, "referral", "Voicemail Script")
+        db.commit()
+    except Exception as exc:
+        log.error("Voicemail scripts generation failed: %s", exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
 
 
-async def _generate_postcard_bg(company_id: str, company_data: dict, db: Session):
-    content = llm_service.generate_postcard_copy(company_data)
-    ci = ContentItem(
-        company_id=company_id,
-        content_type=ContentType.postcard,
-        status=ContentStatus.pending_review,
-        title="Referral Postcard (6x9)",
-        body=content.get("front", {}).get("headline", ""),
-        metadata=content,
-    )
-    db.add(ci)
-    db.flush()
-    _add_to_approval_queue(db, company_id, ci, "referral", "Postcard Design")
-    db.commit()
+async def _generate_email_sequence_bg(company_id: str, company_data: dict, target_specialty: str):
+    db = SessionLocal()
+    try:
+        emails = llm_service.generate_email_sequence(company_data, target_specialty)
+        ci = ContentItem(
+            company_id=company_id,
+            content_type=ContentType.email_sequence,
+            status=ContentStatus.pending_review,
+            title=f"Email Sequence — {target_specialty.title()} (7 emails)",
+            body=emails[0].get("body", "") if emails else "",
+            extra_data={"emails": emails, "target_specialty": target_specialty},
+        )
+        db.add(ci)
+        db.flush()
+        _add_to_approval_queue(db, company_id, ci, "referral", "Email Sequence")
+        db.commit()
+    except Exception as exc:
+        log.error("Email sequence generation failed: %s", exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
+async def _generate_postcard_bg(company_id: str, company_data: dict):
+    db = SessionLocal()
+    try:
+        content = llm_service.generate_postcard_copy(company_data)
+        ci = ContentItem(
+            company_id=company_id,
+            content_type=ContentType.postcard,
+            status=ContentStatus.pending_review,
+            title="Referral Postcard (6x9)",
+            body=content.get("front", {}).get("headline", ""),
+            extra_data=content,
+        )
+        db.add(ci)
+        db.flush()
+        _add_to_approval_queue(db, company_id, ci, "referral", "Postcard Design")
+        db.commit()
+    except Exception as exc:
+        log.error("Postcard generation failed: %s", exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
 
 
 # ------------------------------------------------------------------ #

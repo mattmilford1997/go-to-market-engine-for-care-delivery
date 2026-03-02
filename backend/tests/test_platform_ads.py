@@ -8,6 +8,7 @@ Covers:
   - extra_data includes 'body' field for frontend preview compatibility
   - LLM failure produces a placeholder item (no crash, no empty response)
   - Unknown platform falls back to generic prompt without crashing
+  - bg task owns its own DB session (not passed from route handler)
 """
 import pytest
 import uuid
@@ -29,6 +30,12 @@ def _company_data():
         "differentiators": ["Same-week intake"],
         "brand_guidelines": {"tone": "warm"},
     }
+
+
+def _make_session_mock(db):
+    mock = MagicMock(wraps=db)
+    mock.close = MagicMock()
+    return mock
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -58,7 +65,7 @@ class TestPlatformEndpoints:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Background task — creates individual ContentItem per ad
+# Background task — creates individual ContentItem per ad, owns its own session
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestPlatformAdsBgTask:
@@ -71,9 +78,11 @@ class TestPlatformAdsBgTask:
         from app.api.modules.paid_ads import _generate_platform_ads_bg
         from app.models.content import ContentItem
 
-        await _generate_platform_ads_bg(
-            created_company.id, _company_data(), platform, db
-        )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            await _generate_platform_ads_bg(
+                created_company.id, _company_data(), platform
+            )
 
         # Filter in Python (extra_data JSON subscript syntax is PostgreSQL-specific)
         all_items = db.query(ContentItem).filter(
@@ -93,9 +102,11 @@ class TestPlatformAdsBgTask:
         from app.api.modules.paid_ads import _generate_platform_ads_bg
         from app.models.content import ContentItem
 
-        await _generate_platform_ads_bg(
-            created_company.id, _company_data(), platform, db
-        )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            await _generate_platform_ads_bg(
+                created_company.id, _company_data(), platform
+            )
 
         all_items = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -121,9 +132,11 @@ class TestPlatformAdsBgTask:
         from app.api.modules.paid_ads import _generate_platform_ads_bg
         from app.models.content import ContentItem, ApprovalItem
 
-        await _generate_platform_ads_bg(
-            created_company.id, _company_data(), platform, db
-        )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            await _generate_platform_ads_bg(
+                created_company.id, _company_data(), platform
+            )
 
         all_items = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -143,6 +156,32 @@ class TestPlatformAdsBgTask:
         )
 
     @pytest.mark.asyncio
+    async def test_platform_ads_bg_calls_session_local(self, created_company, db, mock_llm):
+        """bg task must call SessionLocal() not receive db from route handler."""
+        from app.api.modules.paid_ads import _generate_platform_ads_bg
+
+        session_factory = MagicMock(return_value=_make_session_mock(db))
+        with patch("app.api.modules.paid_ads.SessionLocal", session_factory):
+            await _generate_platform_ads_bg(
+                created_company.id, _company_data(), "reddit"
+            )
+
+        session_factory.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_platform_ads_bg_closes_session(self, created_company, db, mock_llm):
+        """bg task must close its session after completion."""
+        from app.api.modules.paid_ads import _generate_platform_ads_bg
+
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            await _generate_platform_ads_bg(
+                created_company.id, _company_data(), "linkedin"
+            )
+
+        mock_session.close.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_platform_ads_bg_llm_failure_creates_placeholder(
         self, created_company, db
     ):
@@ -150,14 +189,16 @@ class TestPlatformAdsBgTask:
         from app.api.modules.paid_ads import _generate_platform_ads_bg
         from app.models.content import ContentItem
 
-        with patch(
-            "app.api.modules.paid_ads.llm_service._chat_json",
-            side_effect=RuntimeError("API key not configured"),
-        ):
-            # Should not raise
-            await _generate_platform_ads_bg(
-                created_company.id, _company_data(), "reddit", db
-            )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            with patch(
+                "app.api.modules.paid_ads.llm_service._chat_json",
+                side_effect=RuntimeError("API key not configured"),
+            ):
+                # Should not raise
+                await _generate_platform_ads_bg(
+                    created_company.id, _company_data(), "reddit"
+                )
 
         items = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -179,9 +220,11 @@ class TestPlatformAdsBgTask:
         from app.api.modules.paid_ads import _generate_platform_ads_bg
         from app.models.content import ContentItem
 
-        await _generate_platform_ads_bg(
-            created_company.id, _company_data(), "snapchat", db
-        )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            await _generate_platform_ads_bg(
+                created_company.id, _company_data(), "snapchat"
+            )
 
         items = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -198,13 +241,15 @@ class TestPlatformAdsBgTask:
             {"title": f"Ad {i}", "body": f"Body {i}", "cta": "Click"}
             for i in range(1, 10)
         ]
-        with patch(
-            "app.api.modules.paid_ads.llm_service._chat_json",
-            return_value={"ads": many_ads},
-        ):
-            await _generate_platform_ads_bg(
-                created_company.id, _company_data(), "reddit", db
-            )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            with patch(
+                "app.api.modules.paid_ads.llm_service._chat_json",
+                return_value={"ads": many_ads},
+            ):
+                await _generate_platform_ads_bg(
+                    created_company.id, _company_data(), "reddit"
+                )
 
         count = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -230,13 +275,15 @@ class TestPlatformBodyFieldExtraction:
             "cta": "Learn more in comments",
             "subreddit": "r/depression",
         }
-        with patch(
-            "app.api.modules.paid_ads.llm_service._chat_json",
-            return_value={"ads": [reddit_ad]},
-        ):
-            await _generate_platform_ads_bg(
-                created_company.id, _company_data(), "reddit", db
-            )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            with patch(
+                "app.api.modules.paid_ads.llm_service._chat_json",
+                return_value={"ads": [reddit_ad]},
+            ):
+                await _generate_platform_ads_bg(
+                    created_company.id, _company_data(), "reddit"
+                )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -253,13 +300,15 @@ class TestPlatformBodyFieldExtraction:
             "answer": "TMS (Transcranial Magnetic Stimulation) is a non-invasive treatment...",
             "cta": "Learn more at Novamind",
         }
-        with patch(
-            "app.api.modules.paid_ads.llm_service._chat_json",
-            return_value={"ads": [quora_ad]},
-        ):
-            await _generate_platform_ads_bg(
-                created_company.id, _company_data(), "quora", db
-            )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            with patch(
+                "app.api.modules.paid_ads.llm_service._chat_json",
+                return_value={"ads": [quora_ad]},
+            ):
+                await _generate_platform_ads_bg(
+                    created_company.id, _company_data(), "quora"
+                )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -278,13 +327,15 @@ class TestPlatformBodyFieldExtraction:
             "hashtags": ["#mentalhealth", "#tmstherapy"],
             "cta": "Link in bio",
         }
-        with patch(
-            "app.api.modules.paid_ads.llm_service._chat_json",
-            return_value={"ads": [tiktok_ad]},
-        ):
-            await _generate_platform_ads_bg(
-                created_company.id, _company_data(), "tiktok", db
-            )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            with patch(
+                "app.api.modules.paid_ads.llm_service._chat_json",
+                return_value={"ads": [tiktok_ad]},
+            ):
+                await _generate_platform_ads_bg(
+                    created_company.id, _company_data(), "tiktok"
+                )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -301,13 +352,15 @@ class TestPlatformBodyFieldExtraction:
             "intro_text": "Are you a PCP or therapist looking for a reliable mental health referral partner?",
             "cta_label": "Contact Us",
         }
-        with patch(
-            "app.api.modules.paid_ads.llm_service._chat_json",
-            return_value={"ads": [linkedin_ad]},
-        ):
-            await _generate_platform_ads_bg(
-                created_company.id, _company_data(), "linkedin", db
-            )
+        mock_session = _make_session_mock(db)
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            with patch(
+                "app.api.modules.paid_ads.llm_service._chat_json",
+                return_value={"ads": [linkedin_ad]},
+            ):
+                await _generate_platform_ads_bg(
+                    created_company.id, _company_data(), "linkedin"
+                )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,

@@ -196,9 +196,12 @@ class TestPaidAdsBgTasks:
         from app.api.modules.paid_ads import _generate_keyword_clusters_bg
         from app.models.content import ContentItem, ContentType
 
-        result = await _generate_keyword_clusters_bg(
-            created_company.id, _company_data(), db
-        )
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            result = await _generate_keyword_clusters_bg(
+                created_company.id, _company_data()
+            )
 
         assert isinstance(result, list)
         item = db.query(ContentItem).filter(
@@ -212,10 +215,13 @@ class TestPaidAdsBgTasks:
         from app.api.modules.paid_ads import _generate_google_copy_bg
         from app.models.content import ContentItem, ContentType
 
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
         cluster = {"cluster_name": "TMS Local", "keywords": ["tms near me"]}
-        await _generate_google_copy_bg(
-            created_company.id, _company_data(), cluster, db
-        )
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            await _generate_google_copy_bg(
+                created_company.id, _company_data(), cluster
+            )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -229,7 +235,10 @@ class TestPaidAdsBgTasks:
         from app.api.modules.paid_ads import _generate_all_google_bg
         from app.models.content import ContentItem, ContentType
 
-        await _generate_all_google_bg(created_company.id, _company_data(), db)
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            await _generate_all_google_bg(created_company.id, _company_data())
 
         items = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -242,10 +251,13 @@ class TestPaidAdsBgTasks:
         from app.api.modules.paid_ads import _generate_meta_copy_bg
         from app.models.content import ContentItem, ContentType
 
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
         audience = {"name": "Depression Seekers", "age": "25-54"}
-        await _generate_meta_copy_bg(
-            created_company.id, _company_data(), audience, db
-        )
+        with patch("app.api.modules.paid_ads.SessionLocal", return_value=mock_session):
+            await _generate_meta_copy_bg(
+                created_company.id, _company_data(), audience
+            )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -315,11 +327,17 @@ class TestReferralBgTasks:
              "specialty": "Psychiatry", "city": "Phoenix", "state": "AZ"},
         ]
 
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
         with patch("app.api.modules.referral.generate_lead_list_for_company",
                    new=AsyncMock(return_value=mock_leads)):
-            await _generate_leads_bg(created_company.id, _company_data(), db)
-            # Call again — should not create duplicate
-            await _generate_leads_bg(created_company.id, _company_data(), db)
+            with patch("app.api.modules.referral.SessionLocal", return_value=mock_session):
+                await _generate_leads_bg(created_company.id, _company_data())
+            # Call again with fresh session mock — should not create duplicate
+            mock_session2 = MagicMock(wraps=db)
+            mock_session2.close = MagicMock()
+            with patch("app.api.modules.referral.SessionLocal", return_value=mock_session2):
+                await _generate_leads_bg(created_company.id, _company_data())
 
         leads = db.query(ReferralLead).filter(
             ReferralLead.company_id == created_company.id,
@@ -332,9 +350,12 @@ class TestReferralBgTasks:
         from app.api.modules.referral import _generate_fax_sheet_bg
         from app.models.content import ContentItem, ContentType
 
-        await _generate_fax_sheet_bg(
-            created_company.id, _company_data(), "psychiatry", db
-        )
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+        with patch("app.api.modules.referral.SessionLocal", return_value=mock_session):
+            await _generate_fax_sheet_bg(
+                created_company.id, _company_data(), "psychiatry"
+            )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -347,9 +368,12 @@ class TestReferralBgTasks:
         from app.api.modules.referral import _generate_voicemail_bg
         from app.models.content import ContentItem, ContentType
 
-        await _generate_voicemail_bg(
-            created_company.id, _company_data(), "psychiatry", db
-        )
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+        with patch("app.api.modules.referral.SessionLocal", return_value=mock_session):
+            await _generate_voicemail_bg(
+                created_company.id, _company_data(), "psychiatry"
+            )
 
         items = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -362,9 +386,12 @@ class TestReferralBgTasks:
         from app.api.modules.referral import _generate_email_sequence_bg
         from app.models.content import ContentItem, ContentType
 
-        await _generate_email_sequence_bg(
-            created_company.id, _company_data(), "psychiatry", db
-        )
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+        with patch("app.api.modules.referral.SessionLocal", return_value=mock_session):
+            await _generate_email_sequence_bg(
+                created_company.id, _company_data(), "psychiatry"
+            )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
@@ -377,9 +404,12 @@ class TestReferralBgTasks:
         from app.api.modules.referral import _generate_postcard_bg
         from app.models.content import ContentItem, ContentType
 
-        await _generate_postcard_bg(
-            created_company.id, _company_data(), db
-        )
+        mock_session = MagicMock(wraps=db)
+        mock_session.close = MagicMock()
+        with patch("app.api.modules.referral.SessionLocal", return_value=mock_session):
+            await _generate_postcard_bg(
+                created_company.id, _company_data()
+            )
 
         item = db.query(ContentItem).filter(
             ContentItem.company_id == created_company.id,
