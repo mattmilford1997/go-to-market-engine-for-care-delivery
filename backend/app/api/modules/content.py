@@ -1,12 +1,15 @@
 """Module 3: Organic Content Engine API routes."""
+import logging
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.db.database import get_db
+from app.db.database import get_db, SessionLocal
 from app.models.company import Company
 from app.models.content import ContentItem, ApprovalItem, ContentType, ContentStatus
 from app.services.llm import llm_service
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/content", tags=["content"])
 
@@ -52,7 +55,7 @@ async def generate_blog_post(
     keyword = payload.get("keyword", "mental health treatment")
     word_count = payload.get("word_count", 1500)
     background_tasks.add_task(
-        _generate_blog_post_bg, company_id, _company_data(company), keyword, word_count, db
+        _generate_blog_post_bg, company_id, _company_data(company), keyword, word_count
     )
     return {"status": "generating"}
 
@@ -75,7 +78,7 @@ async def generate_social_posts(
     platforms = ["facebook", "instagram", "linkedin"] if platform == "all" else [platform]
     for p in platforms:
         background_tasks.add_task(
-            _generate_social_bg, company_id, _company_data(company), p, count, db
+            _generate_social_bg, company_id, _company_data(company), p, count
         )
     return {"status": "generating", "platforms": platforms}
 
@@ -88,7 +91,7 @@ async def generate_full_calendar(
 ):
     """Generate the full 12-week content calendar."""
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_calendar_bg, company_id, _company_data(company), db)
+    background_tasks.add_task(_generate_calendar_bg, company_id, _company_data(company))
     return {"status": "generating"}
 
 
@@ -142,8 +145,10 @@ async def update_content_item(
 # ------------------------------------------------------------------ #
 
 async def _generate_blog_post_bg(
-    company_id: str, company_data: dict, keyword: str, word_count: int, db: Session
+    company_id: str, company_data: dict, keyword: str, word_count: int
 ):
+    """Background task — owns its own DB session so the request session lifetime doesn't matter."""
+    db = SessionLocal()
     try:
         post = llm_service.generate_blog_post(company_data, keyword, word_count)
         ci = ContentItem(
@@ -166,17 +171,24 @@ async def _generate_blog_post_bg(
         _add_approval_item(db, company_id, ci, "content", "Blog Post")
         db.commit()
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).error(
+        log.error(
             "Blog post generation failed for company %s keyword=%r: %s",
             company_id, keyword, exc, exc_info=True,
         )
         db.rollback()
+    finally:
+        db.close()
 
 
 async def _generate_social_bg(
-    company_id: str, company_data: dict, platform: str, count: int, db: Session
+    company_id: str, company_data: dict, platform: str, count: int,
+    db: Session | None = None,
 ):
+    """Background task — creates its own session when called directly; accepts a shared
+    session when called from _generate_calendar_bg so all content commits together."""
+    own_db = db is None
+    if own_db:
+        db = SessionLocal()
     try:
         posts = llm_service.generate_social_posts(company_data, platform, count)
         content_type_map = {
@@ -204,46 +216,59 @@ async def _generate_social_bg(
             db.add(ci)
             db.flush()
             _add_approval_item(db, company_id, ci, "content", f"{platform.title()} Post")
-        db.commit()
+        if own_db:
+            db.commit()
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).error(
+        log.error(
             "Social post generation failed for company %s platform=%s: %s",
             company_id, platform, exc, exc_info=True,
         )
+        if own_db:
+            db.rollback()
+    finally:
+        if own_db:
+            db.close()
+
+
+async def _generate_calendar_bg(company_id: str, company_data: dict):
+    """Background task — owns its own DB session."""
+    db = SessionLocal()
+    try:
+        # Single LLM call for the full 12-week plan
+        calendar = llm_service.generate_content_calendar(company_data, weeks=12)
+        weeks = calendar.get("weeks", [])
+
+        # Create draft placeholder blog items — no per-post LLM call here.
+        # This drops generation from 15+ sequential LLM calls (~10 min) to 4 total (~1 min).
+        for week in weeks:
+            for blog in week.get("blog_topics", []):
+                ci = ContentItem(
+                    company_id=company_id,
+                    content_type=ContentType.blog_post,
+                    status=ContentStatus.draft,
+                    title=blog.get("title", "Blog Post"),
+                    body="",
+                    target_keyword=blog.get("target_keyword", ""),
+                    extra_data={
+                        "week": week.get("week"),
+                        "theme": week.get("theme", ""),
+                        "word_count": blog.get("word_count", 1500),
+                        "planned": True,
+                    },
+                )
+                db.add(ci)
+        db.flush()
+
+        # Generate social posts (5 per platform, 3 platforms = 3 LLM calls)
+        for platform in ["facebook", "instagram", "linkedin"]:
+            await _generate_social_bg(company_id, company_data, platform, 5, db)
+
+        db.commit()
+    except Exception as exc:
+        log.error("Calendar generation failed for company %s: %s", company_id, exc, exc_info=True)
         db.rollback()
-
-
-async def _generate_calendar_bg(company_id: str, company_data: dict, db: Session):
-    # Single LLM call for the full 12-week plan
-    calendar = llm_service.generate_content_calendar(company_data, weeks=12)
-    weeks = calendar.get("weeks", [])
-
-    # Create draft placeholder blog items — no per-post LLM call here.
-    # This drops generation from 15+ sequential LLM calls (~10 min) to 4 total (~1 min).
-    # Users can generate individual posts on demand from the content library.
-    for week in weeks:
-        for blog in week.get("blog_topics", []):
-            ci = ContentItem(
-                company_id=company_id,
-                content_type=ContentType.blog_post,
-                status=ContentStatus.draft,
-                title=blog.get("title", "Blog Post"),
-                body="",
-                target_keyword=blog.get("target_keyword", ""),
-                extra_data={
-                    "week": week.get("week"),
-                    "theme": week.get("theme", ""),
-                    "word_count": blog.get("word_count", 1500),
-                    "planned": True,
-                },
-            )
-            db.add(ci)
-    db.flush()
-
-    # Generate social posts (5 per platform, 3 platforms = 3 LLM calls)
-    for platform in ["facebook", "instagram", "linkedin"]:
-        await _generate_social_bg(company_id, company_data, platform, 5, db)
+    finally:
+        db.close()
 
 
 def _add_approval_item(db, company_id, content_item, module, type_label):
