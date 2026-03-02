@@ -3,6 +3,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { referralApi, approvalApi } from "@/lib/api";
 import { formatNumber, cn } from "@/lib/utils";
+import ProgressBanner from "@/components/ProgressBanner";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, FunnelChart, Funnel, LabelList,
@@ -308,6 +309,32 @@ export default function ReferralPage() {
           </div>
         </div>
       </div>
+
+      <ProgressBanner
+        active={generatingLeads}
+        label="Searching NPPES Registry for Provider Leads"
+        estimatedSeconds={25}
+        steps={[
+          "Querying NPPES national provider registry…",
+          "Filtering by specialty and location…",
+          "Deduplicating records…",
+          "Importing provider contacts…",
+        ]}
+        color="emerald"
+      />
+      <ProgressBanner
+        active={generating}
+        label="Generating All Referral Collateral"
+        estimatedSeconds={50}
+        steps={[
+          "Writing fax sheets for each specialty…",
+          "Scripting voicemail drops…",
+          "Drafting 7-email outreach sequences…",
+          "Designing postcard copy…",
+          "Saving assets to approval queue…",
+        ]}
+        color="emerald"
+      />
 
       <div className="p-8 space-y-8">
         {/* Stats Row */}

@@ -199,20 +199,35 @@ async def _generate_social_bg(
 
 
 async def _generate_calendar_bg(company_id: str, company_data: dict, db: Session):
+    # Single LLM call for the full 12-week plan
     calendar = llm_service.generate_content_calendar(company_data, weeks=12)
     weeks = calendar.get("weeks", [])
+
+    # Create draft placeholder blog items — no per-post LLM call here.
+    # This drops generation from 15+ sequential LLM calls (~10 min) to 4 total (~1 min).
+    # Users can generate individual posts on demand from the content library.
     for week in weeks:
-        # Generate blog topics as content items
         for blog in week.get("blog_topics", []):
-            await _generate_blog_post_bg(
-                company_id, company_data,
-                blog.get("target_keyword", blog.get("title", "healthcare")),
-                blog.get("word_count", 1500),
-                db,
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.blog_post,
+                status=ContentStatus.draft,
+                title=blog.get("title", "Blog Post"),
+                body="",
+                target_keyword=blog.get("target_keyword", ""),
+                metadata={
+                    "week": week.get("week"),
+                    "theme": week.get("theme", ""),
+                    "word_count": blog.get("word_count", 1500),
+                    "planned": True,
+                },
             )
-    # Generate social posts for each platform
+            db.add(ci)
+    db.flush()
+
+    # Generate social posts (5 per platform, 3 platforms = 3 LLM calls)
     for platform in ["facebook", "instagram", "linkedin"]:
-        await _generate_social_bg(company_id, company_data, platform, 10, db)
+        await _generate_social_bg(company_id, company_data, platform, 5, db)
 
 
 def _add_approval_item(db, company_id, content_item, module, type_label):
@@ -254,10 +269,10 @@ def _content_to_dict(item: ContentItem) -> dict:
         "content_type": item.content_type,
         "status": item.status,
         "title": item.title,
-        "body_preview": (item.body or "")[:500],
+        "body": item.body or "",
         "target_keyword": item.target_keyword,
         "meta_description": item.meta_description,
-        "extra_data": item.extra_data,
+        "extra_data": item.extra_data or item.metadata or {},
         "asset_url": item.asset_url,
         "published_url": item.published_url,
         "scheduled_for": item.scheduled_for,

@@ -3,6 +3,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { contentApi, approvalApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import ProgressBanner from "@/components/ProgressBanner";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -16,10 +17,12 @@ import {
 interface ContentItem {
   id: string;
   title: string;
-  body: string;
+  body: string;           // full body text (markdown for blogs, caption for social, script for VM)
   content_type: string;
   status: string;
   target_keyword?: string;
+  meta_description?: string;
+  extra_data?: Record<string, any>;
   created_at: string;
 }
 interface CalendarEntry {
@@ -68,6 +71,196 @@ function StatusBadge({ status }: { status: string }) {
     <span className={cn("badge capitalize", STATUS_MAP[status] || "bg-slate-100 text-slate-600")}>
       {status.replace("_", " ")}
     </span>
+  );
+}
+
+// ─── Markdown Renderer ───────────────────────────────────────────
+function renderMarkdown(text: string): React.ReactNode[] {
+  return text.split("\n").map((line, i) => {
+    if (line.startsWith("### "))
+      return <p key={i} className="text-sm font-semibold text-slate-800 mt-3 mb-0.5">{line.slice(4)}</p>;
+    if (line.startsWith("## "))
+      return <p key={i} className="text-base font-bold text-slate-900 mt-4 mb-1">{line.slice(3)}</p>;
+    if (line.startsWith("# "))
+      return <p key={i} className="text-lg font-bold text-slate-900 mt-4 mb-1">{line.slice(2)}</p>;
+    if (line.startsWith("- ") || line.startsWith("* ")) {
+      const content = line.slice(2);
+      const parts = content.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+        p.startsWith("**") && p.endsWith("**") ? <strong key={j}>{p.slice(2, -2)}</strong> : p
+      );
+      return <div key={i} className="flex gap-1.5 text-sm text-slate-600"><span className="text-slate-400 shrink-0">•</span><span>{parts}</span></div>;
+    }
+    if (line.trim() === "") return <div key={i} className="h-1.5" />;
+    const parts = line.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+      p.startsWith("**") && p.endsWith("**") ? <strong key={j}>{p.slice(2, -2)}</strong> : p
+    );
+    return <p key={i} className="text-sm text-slate-600 leading-relaxed">{parts}</p>;
+  });
+}
+
+// ─── Content Preview ─────────────────────────────────────────────
+function ContentPreview({ item }: { item: ContentItem }) {
+  const body = item.body || "";
+  const extra = item.extra_data || {};
+
+  // Blog post
+  if (item.content_type === "blog_post") {
+    const faq: Array<{ question: string; answer: string }> = extra.faq_schema || [];
+    return (
+      <div className="mt-3 space-y-3">
+        {item.meta_description && (
+          <p className="text-xs text-slate-500 italic border-l-2 border-violet-200 pl-3">{item.meta_description}</p>
+        )}
+        {item.target_keyword && (
+          <div className="flex gap-1 flex-wrap">
+            <span className="px-2 py-0.5 bg-violet-50 text-violet-700 text-xs rounded-full">🔑 {item.target_keyword}</span>
+            {(extra.secondary_keywords || []).slice(0, 4).map((kw: string) => (
+              <span key={kw} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full">{kw}</span>
+            ))}
+          </div>
+        )}
+        {body ? (
+          <div className="max-h-72 overflow-y-auto border border-slate-100 rounded-lg p-3 bg-white space-y-0.5">
+            {renderMarkdown(body)}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400 italic">Content will be generated — click "Generate" to fill this draft.</p>
+        )}
+        {faq.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">FAQ</p>
+            {faq.slice(0, 3).map((f, i) => (
+              <div key={i}>
+                <p className="text-xs font-semibold text-slate-700">Q: {f.question}</p>
+                <p className="text-xs text-slate-500 mt-0.5">A: {f.answer}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Social posts
+  if (item.content_type.startsWith("social_")) {
+    const platform = item.content_type.replace("social_", "");
+    const hashtags: string[] = extra.hashtags || [];
+    const imageConcept: string = extra.image_concept || "";
+    const bestDays: string[] = extra.best_days || [];
+    const bestTimes: string[] = extra.best_times || [];
+    return (
+      <div className="mt-3 rounded-lg border border-slate-100 p-3 bg-white space-y-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{platform} post</p>
+        <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{body || "No caption yet."}</p>
+        {hashtags.length > 0 && (
+          <p className="text-xs text-blue-500">{hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}</p>
+        )}
+        {imageConcept && <p className="text-xs text-slate-400 italic">📷 {imageConcept}</p>}
+        {(bestDays.length > 0 || bestTimes.length > 0) && (
+          <p className="text-xs text-slate-400">Best time: {bestDays.join(", ")} @ {bestTimes.join(", ")}</p>
+        )}
+      </div>
+    );
+  }
+
+  // Email sequence (stored in extra_data.emails)
+  if (item.content_type === "email_sequence") {
+    const emails: any[] = extra.emails || [];
+    if (emails.length > 0) {
+      return (
+        <div className="mt-3 space-y-2 max-h-80 overflow-y-auto">
+          {emails.map((email: any, i: number) => (
+            <div key={i} className="rounded-lg border border-slate-100 p-3 bg-white">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-violet-700">Day {email.day}</span>
+                {email.focus && <span className="text-xs text-slate-400">· {email.focus}</span>}
+              </div>
+              <p className="text-xs font-semibold text-slate-700">Subject: {email.subject}</p>
+              {email.preview_text && <p className="text-xs text-slate-400 italic mt-0.5">{email.preview_text}</p>}
+              <p className="text-sm text-slate-600 leading-relaxed mt-2 whitespace-pre-wrap line-clamp-4">{email.body}</p>
+              {email.cta && <p className="text-xs font-semibold text-violet-600 mt-1.5">CTA: {email.cta}</p>}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    // Fallback to body text
+    return <p className="text-sm text-slate-600 leading-relaxed mt-3 whitespace-pre-wrap">{body || "No content yet."}</p>;
+  }
+
+  // Fax sheet (extra_data has full structure)
+  if (item.content_type === "fax_sheet") {
+    const headline = extra.headline || "";
+    const tagline = extra.tagline || "";
+    const intro = extra.intro_paragraph || body;
+    const whyRefer: string[] = extra.why_refer_points || [];
+    const intake: string = extra.intake_process || "";
+    return (
+      <div className="mt-3 space-y-2">
+        {headline && <p className="font-bold text-slate-900">{headline}</p>}
+        {tagline && <p className="text-sm text-slate-500 italic">{tagline}</p>}
+        {intro && <p className="text-sm text-slate-700 leading-relaxed">{intro}</p>}
+        {whyRefer.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-2 mb-1">Why Refer</p>
+            <ul className="space-y-0.5">
+              {whyRefer.map((pt, i) => (
+                <li key={i} className="flex gap-1.5 text-sm text-slate-600">
+                  <span className="text-emerald-500 shrink-0">✓</span>{pt}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {intake && <p className="text-sm text-slate-600"><span className="font-medium">Intake:</span> {intake}</p>}
+        {extra.footer_cta && <p className="text-sm font-semibold text-blue-700 mt-1">{extra.footer_cta}</p>}
+      </div>
+    );
+  }
+
+  // Voicemail script (body is the script text)
+  if (item.content_type === "voicemail_script") {
+    return (
+      <div className="mt-3 rounded-lg border border-slate-100 p-3 bg-white">
+        <p className="text-sm text-slate-700 leading-relaxed italic">"{body || "Script not yet generated."}"</p>
+        {extra.word_count && <p className="text-xs text-slate-400 mt-1.5">{extra.word_count} words · ~{extra.estimated_duration_seconds}s</p>}
+      </div>
+    );
+  }
+
+  // Postcard
+  if (item.content_type === "postcard") {
+    const front = extra.front || {};
+    const back = extra.back || {};
+    return (
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-slate-100 p-3 bg-amber-50">
+          <p className="text-xs font-semibold text-amber-700 mb-1">FRONT</p>
+          {front.headline && <p className="font-bold text-slate-900 text-sm">{front.headline}</p>}
+          {front.subheadline && <p className="text-xs text-slate-600 mt-0.5">{front.subheadline}</p>}
+          {front.cta_text && <p className="text-xs font-semibold text-amber-700 mt-2">{front.cta_text}</p>}
+        </div>
+        <div className="rounded-lg border border-slate-100 p-3 bg-white">
+          <p className="text-xs font-semibold text-slate-500 mb-1">BACK</p>
+          {back.headline && <p className="font-medium text-slate-800 text-sm">{back.headline}</p>}
+          {back.body && <p className="text-xs text-slate-600 mt-1 line-clamp-3">{back.body}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // Default: render body as text (with markdown if it looks like markdown)
+  if (body.includes("##") || body.includes("**")) {
+    return (
+      <div className="mt-3 max-h-60 overflow-y-auto border border-slate-100 rounded-lg p-3 bg-white space-y-0.5">
+        {renderMarkdown(body)}
+      </div>
+    );
+  }
+  return (
+    <p className="text-sm text-slate-600 leading-relaxed mt-3 whitespace-pre-wrap line-clamp-10">
+      {body || "No content yet."}
+    </p>
   );
 }
 
@@ -165,7 +358,12 @@ export default function ContentPage() {
       contentApi.items(companyId).catch(() => ({ data: { items: [] } })),
       contentApi.calendar(companyId).catch(() => ({ data: { weeks: [] } })),
     ]).then(([i, c]) => {
-      setItems(i.data.items || i.data || []);
+      // Normalise body_preview → body for API-returned items
+      const rawItems = i.data.items || i.data || [];
+      setItems(rawItems.map((item: any) => ({
+        ...item,
+        body: item.body ?? item.body_preview ?? "",
+      })));
       setCalendar(c.data.weeks || []);
     }).finally(() => setLoading(false));
   }, [companyId]);
@@ -299,6 +497,34 @@ export default function ContentPage() {
           </div>
         </div>
       </div>
+
+      <ProgressBanner
+        active={generating === "blog"}
+        label="Writing Blog Post"
+        estimatedSeconds={18}
+        steps={["Researching keyword…", "Drafting article body…", "Generating FAQ schema…", "Finalising metadata…"]}
+        color="violet"
+      />
+      <ProgressBanner
+        active={generating === "social"}
+        label="Generating Social Posts"
+        estimatedSeconds={12}
+        steps={["Crafting Facebook captions…", "Writing Instagram posts…", "Drafting LinkedIn content…"]}
+        color="violet"
+      />
+      <ProgressBanner
+        active={generating === "calendar"}
+        label="Building 12-Week Content Calendar"
+        estimatedSeconds={35}
+        steps={[
+          "Planning content pillars…",
+          "Scheduling 12 weeks of topics…",
+          "Balancing blog and social mix…",
+          "Writing social captions…",
+          "Saving to approval queue…",
+        ]}
+        color="violet"
+      />
 
       <div className="p-8 space-y-8">
         {/* Stats Row */}
@@ -463,9 +689,7 @@ export default function ContentPage() {
                   </div>
                   {expandedId === item.id && (
                     <div className="px-4 pb-4 border-t border-slate-50">
-                      <p className="text-sm text-slate-600 leading-relaxed mt-3 whitespace-pre-wrap line-clamp-10">
-                        {item.body || "No content generated yet."}
-                      </p>
+                      <ContentPreview item={item} />
                     </div>
                   )}
                 </div>
