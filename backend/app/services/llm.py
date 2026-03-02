@@ -193,13 +193,19 @@ class LLMService:
             system=system,
         ).content[0].text
 
-    def _chat_json(self, prompt: str, system: str = "", use_strategy: bool = False) -> dict | list:
-        raw = self._chat(prompt, system=system, use_strategy=use_strategy)
+    def _chat_json(self, prompt: str, system: str = "", use_strategy: bool = False, max_tokens: int = 8192) -> dict | list:
+        raw = self._chat(prompt, system=system, use_strategy=use_strategy, max_tokens=max_tokens)
         cleaned = raw.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1]
             cleaned = cleaned.rsplit("```", 1)[0]
-        return json.loads(cleaned)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"LLM returned incomplete JSON (response likely truncated at {max_tokens} tokens). "
+                f"Parse error: {exc}. Raw tail: ...{cleaned[-200:]!r}"
+            ) from exc
 
     # ── Company Ingestion ──────────────────────────────────────────────────
 
@@ -305,7 +311,7 @@ Return JSON:
   "fax_back_form": {{"title": "Referral Request", "fields": ["Patient Name", "DOB", "Referring Provider", "Reason for Referral", "Urgency", "Best Contact"]}},
   "footer_cta": "...", "opt_out_text": "To stop receiving faxes, fax REMOVE to [FAX NUMBER]"
 }}"""
-        return self._chat_json(prompt, system=system)
+        return self._chat_json(prompt, system=system, max_tokens=8192)
 
     def generate_voicemail_scripts(self, company_data: dict, target_specialty: str) -> list:
         system = "You are a healthcare marketing copywriter. Return ONLY valid JSON."
@@ -345,7 +351,7 @@ Target keyword: {keyword}
 Brand tone: {company_data.get('brand_guidelines', {}).get('tone', 'warm and clinical')}
 
 Return JSON: {{"title": "...", "meta_description": "...", "slug": "...", "target_keyword": "{keyword}", "secondary_keywords": ["..."], "body_markdown": "...", "faq_schema": [{{"question": "...", "answer": "..."}}], "estimated_word_count": {target_word_count}, "internal_link_suggestions": ["..."], "image_alt_text_suggestions": ["..."]}}"""
-        return self._chat_json(prompt, system=system, use_strategy=False)
+        return self._chat_json(prompt, system=system, use_strategy=False, max_tokens=8192)
 
     def generate_social_posts(self, company_data: dict, content_type: str, count: int = 5) -> list:
         system = "You are a healthcare social media manager. Return ONLY valid JSON."
@@ -363,7 +369,7 @@ Return [{{"type": "...", "caption": "...", "hashtags": ["..."], "image_concept":
 Services: {', '.join([s.get('name', '') for s in company_data.get('services', [])[:10]])}
 
 Return: {{"strategy_overview": "...", "content_pillars": ["..."], "weeks": [{{"week": 1, "theme": "...", "blog_topics": [{{"title": "...", "target_keyword": "...", "word_count": 1500}}], "social_themes": [{{"platform": "facebook", "theme": "...", "post_ideas": ["..."]}}]}}]}}"""
-        return self._chat_json(prompt, system=system, use_strategy=True)
+        return self._chat_json(prompt, system=system, use_strategy=True, max_tokens=8192)
 
     # ── Module 4: SEO ──────────────────────────────────────────────────────
 
