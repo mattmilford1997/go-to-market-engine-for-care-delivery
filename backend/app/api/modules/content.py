@@ -154,7 +154,7 @@ async def _generate_blog_post_bg(
             body=post.get("body_markdown", ""),
             target_keyword=post.get("target_keyword", keyword),
             meta_description=post.get("meta_description", ""),
-            metadata={
+            extra_data={
                 "slug": post.get("slug", ""),
                 "secondary_keywords": post.get("secondary_keywords", []),
                 "faq_schema": post.get("faq_schema", []),
@@ -193,7 +193,7 @@ async def _generate_social_bg(
                 status=ContentStatus.pending_review,
                 title=f"{platform.title()} — {post.get('type', 'post').replace('_', ' ').title()}",
                 body=post.get("caption", ""),
-                metadata={
+                extra_data={
                     "hashtags": post.get("hashtags", []),
                     "image_concept": post.get("image_concept", ""),
                     "best_days": post.get("best_days", []),
@@ -231,7 +231,7 @@ async def _generate_calendar_bg(company_id: str, company_data: dict, db: Session
                 title=blog.get("title", "Blog Post"),
                 body="",
                 target_keyword=blog.get("target_keyword", ""),
-                metadata={
+                extra_data={
                     "week": week.get("week"),
                     "theme": week.get("theme", ""),
                     "word_count": blog.get("word_count", 1500),
@@ -255,7 +255,7 @@ def _add_approval_item(db, company_id, content_item, module, type_label):
         preview_data={
             "body_preview": (content_item.body or "")[:500],
             "content_type": content_item.content_type,
-            **(content_item.metadata or {}),
+            **(content_item.extra_data or {}),
         },
         module=module,
     )
@@ -292,7 +292,7 @@ def _content_to_dict(item: ContentItem) -> dict:
         "body": item.body or "",
         "target_keyword": item.target_keyword,
         "meta_description": item.meta_description,
-        "extra_data": item.extra_data or item.metadata or {},
+        "extra_data": item.extra_data or {},
         "asset_url": item.asset_url,
         "published_url": item.published_url,
         "scheduled_for": item.scheduled_for,
