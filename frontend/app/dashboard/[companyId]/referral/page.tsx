@@ -141,13 +141,13 @@ export default function ReferralPage() {
   useEffect(() => {
     if (!companyId) return;
     Promise.all([
-      referralApi.leads(companyId).catch(() => ({ data: { items: [], total: 0 } })),
+      referralApi.leads(companyId).catch(() => ({ data: { leads: [], total: 0 } })),
       referralApi.campaigns(companyId).catch(() => ({ data: [] })),
-      approvalApi.queue(companyId, "referral").catch(() => ({ data: { items: [] } })),
+      approvalApi.queue(companyId, "referral").catch(() => ({ data: [] })),
     ]).then(([l, c, q]) => {
-      setLeads(l.data.items || l.data || []);
+      setLeads((l.data as any).leads || []);
       setCampaigns(c.data || []);
-      setQueueItems(q.data.items || []);
+      setQueueItems(Array.isArray(q.data) ? q.data : []);
     }).finally(() => setLoading(false));
   }, [companyId]);
 
@@ -168,7 +168,7 @@ export default function ReferralPage() {
       showToast(msg);
       setListName("");
       const l = await referralApi.leads(companyId).catch(() => ({ data: { leads: [] } }));
-      setLeads((l.data as any).leads || (l.data as any).items || []);
+      setLeads((l.data as any).leads || []);
     } catch {
       showToast("Upload failed — check CSV format and try again.");
     } finally {
@@ -189,9 +189,11 @@ export default function ReferralPage() {
     setGeneratingLeads(true);
     try {
       await referralApi.generateLeads(companyId);
-      showToast("Lead generation started — providers will appear shortly from NPPES.");
-      const l = await referralApi.leads(companyId).catch(() => ({ data: { items: [] } }));
-      setLeads(l.data.items || l.data || []);
+      showToast("Lead generation started — querying NPPES registry, this takes ~30 seconds…");
+      // NPPES API takes 15-30 seconds; wait before re-fetching so leads are ready
+      await new Promise((r) => setTimeout(r, 30000));
+      const l = await referralApi.leads(companyId).catch(() => ({ data: { leads: [] } }));
+      setLeads((l.data as any).leads || []);
     } catch {
       showToast("Lead generation failed — check API configuration.");
     } finally {
@@ -204,8 +206,8 @@ export default function ReferralPage() {
     try {
       await referralApi.generateAllCollateral(companyId);
       showToast("Collateral generation started — fax, email, voicemail, and postcard assets queued.");
-      const q = await approvalApi.queue(companyId, "referral").catch(() => ({ data: { items: [] } }));
-      setQueueItems(q.data.items || []);
+      const q = await approvalApi.queue(companyId, "referral").catch(() => ({ data: [] }));
+      setQueueItems(Array.isArray(q.data) ? q.data : []);
     } catch {
       showToast("Collateral generation failed — ensure ANTHROPIC_API_KEY is set.");
     } finally {
