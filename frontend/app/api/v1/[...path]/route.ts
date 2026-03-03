@@ -1,11 +1,25 @@
 /**
  * Proxy all /api/v1/* requests to the Railway backend.
- * BACKEND_URL is a server-side runtime env var — set it in Vercel dashboard.
- * Falls back to localhost for local development.
+ *
+ * Resolution order (first non-localhost value wins):
+ *   1. BACKEND_URL          — explicit server-side runtime var (e.g. https://backend.up.railway.app)
+ *   2. NEXT_PUBLIC_API_URL  — if it's an absolute URL, strip the /api/v1 suffix to get the base
+ *   3. http://localhost:8000 — local development fallback
  */
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND = (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
+function resolveBackend(): string {
+  if (process.env.BACKEND_URL) {
+    return process.env.BACKEND_URL.replace(/\/$/, "");
+  }
+  const pub = process.env.NEXT_PUBLIC_API_URL ?? "";
+  if (pub.startsWith("http")) {
+    return pub.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
+  }
+  return "http://localhost:8000";
+}
+
+const BACKEND = resolveBackend();
 const TIMEOUT_MS = 25000; // Vercel Hobby limit is 10s; Pro is 60s — keep headroom
 
 type Params = Promise<{ path: string[] }>;

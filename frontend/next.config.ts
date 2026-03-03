@@ -8,8 +8,14 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     // Proxy /api/v1/* to the backend so the browser never hits a cross-origin URL.
-    // Set BACKEND_URL in Vercel (server-side env) to the Railway backend origin.
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    // Resolution order: BACKEND_URL → base of NEXT_PUBLIC_API_URL → localhost.
+    let backendUrl = process.env.BACKEND_URL?.replace(/\/$/, "") ?? "";
+    if (!backendUrl) {
+      const pub = process.env.NEXT_PUBLIC_API_URL ?? "";
+      backendUrl = pub.startsWith("http")
+        ? pub.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "")
+        : "http://localhost:8000";
+    }
     return [
       {
         source: "/api/v1/:path*",
