@@ -1,33 +1,45 @@
-FROM node:20-alpine AS builder
+# ── Stage 1: Build Next.js frontend ──────────────────────────────────
+FROM node:20-alpine AS frontend-builder
 WORKDIR /app
 
-# Install deps first (better layer caching)
 COPY frontend/package*.json ./
 RUN npm ci
-
-# Copy frontend source
 COPY frontend/ .
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-
+# Do NOT pass NEXT_PUBLIC_API_URL so it defaults to the relative /api/v1 path,
+# which the Next.js API route proxies to http://localhost:8000 (the co-located backend).
 RUN npm run build
 
-# ── Production image ────────────────────────────────────────────
-FROM node:20-alpine AS runner
+# ── Production image: Python 3.11 + Node 20 ──────────────────────────
+FROM python:3.11-slim
+
 WORKDIR /app
 
+# Install Node.js 20.x
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Python backend dependencies
+COPY backend/requirements.txt /backend/requirements.txt
+RUN pip install --no-cache-dir -r /backend/requirements.txt
+
+# Copy backend source
+COPY backend/ /backend/
+
+# Copy Next.js standalone build artifacts
 ENV NODE_ENV=production
+COPY --from=frontend-builder /app/public ./public
+COPY --from=frontend-builder /app/.next/standalone ./
+COPY --from=frontend-builder /app/.next/static ./.next/static
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser  --system --uid  1001 nextjs
+# Startup: run DB migrations → start FastAPI on :8000 → start Next.js on $PORT
+RUN printf '#!/bin/sh\nset -e\ncd /backend && python -m alembic upgrade head\ncd /backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 &\ncd /app && exec node server.js\n' > /start.sh \
+    && chmod +x /start.sh
 
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 
-CMD ["node", "server.js"]
+CMD ["/start.sh"]
