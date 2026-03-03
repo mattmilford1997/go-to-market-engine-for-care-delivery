@@ -50,10 +50,10 @@ def generate_referral_collateral_task(company_id: str):
         }
         specialties = ["primary care physician", "therapist / counselor", "neurologist"]
         for s in specialties:
-            asyncio.run(_generate_fax_sheet_bg(company_id, data, s, db))
-            asyncio.run(_generate_voicemail_bg(company_id, data, s, db))
-        asyncio.run(_generate_email_sequence_bg(company_id, data, "primary care physician", db))
-        asyncio.run(_generate_postcard_bg(company_id, data, db))
+            asyncio.run(_generate_fax_sheet_bg(company_id, data, s))
+            asyncio.run(_generate_voicemail_bg(company_id, data, s))
+        asyncio.run(_generate_email_sequence_bg(company_id, data, "primary care physician"))
+        asyncio.run(_generate_postcard_bg(company_id, data))
     finally:
         db.close()
 
@@ -77,7 +77,7 @@ def generate_leads_task(company_id: str):
             "locations": company.locations or [],
             "referral_target_states": company.referral_target_states or [],
         }
-        asyncio.run(_generate_leads_bg(company_id, data, db))
+        asyncio.run(_generate_leads_bg(company_id, data))
     finally:
         db.close()
 
