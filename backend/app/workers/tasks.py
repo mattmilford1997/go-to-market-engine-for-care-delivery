@@ -75,6 +75,7 @@ def generate_leads_task(company_id: str):
             "company_name": company.name,
             "specialty_niche": company.specialty_niche or "",
             "locations": company.locations or [],
+            "referral_target_states": company.referral_target_states or [],
         }
         asyncio.run(_generate_leads_bg(company_id, data, db))
     finally:

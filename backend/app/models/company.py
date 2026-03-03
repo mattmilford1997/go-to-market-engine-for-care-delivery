@@ -49,6 +49,9 @@ class Company(Base, UUIDMixin, TimestampMixin):
 
     specialty_niche = Column(String(500))
     existing_online_presence = Column(JSON, default={})
+
+    referral_target_states = Column(JSON, default=[])
+    # [str] — list of US state abbreviations to search for NPPES leads (e.g. ["TX", "AZ"])
     # {google_rating, google_reviews, yelp_rating, etc.}
 
     # Module budgets (monthly, USD)

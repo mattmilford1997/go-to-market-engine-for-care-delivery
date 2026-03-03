@@ -28,6 +28,7 @@ class CompanyUpdate(BaseModel):
     budget_social_boost: Optional[float] = None
     posting_frequency: Optional[dict] = None
     competitors: Optional[list] = None
+    referral_target_states: Optional[list] = None
 
 
 class CredentialUpdate(BaseModel):
@@ -217,6 +218,7 @@ def _company_detail(company: Company) -> dict:
         "target_demographics": company.target_demographics,
         "competitors": company.competitors,
         "specialty_niche": company.specialty_niche,
+        "referral_target_states": company.referral_target_states or [],
         "budgets": {
             "google_ads": company.budget_google_ads,
             "meta_ads": company.budget_meta_ads,

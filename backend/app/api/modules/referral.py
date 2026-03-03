@@ -441,8 +441,9 @@ async def _generate_leads_bg(company_id: str, company_data: dict):
     db = SessionLocal()
     try:
         locations = company_data.get("locations", [])
-        if not locations:
-            log.warning("Lead generation skipped for company %s — no locations configured", company_id)
+        target_states = company_data.get("referral_target_states") or []
+        if not locations and not target_states:
+            log.warning("Lead generation skipped for company %s — no locations or target states configured", company_id)
             return
         leads = await generate_lead_list_for_company(company_data)
         if not leads:
@@ -602,6 +603,7 @@ def _get_company(company_id: str, db: Session) -> Company:
         "differentiators": company.differentiators or [],
         "target_demographics": company.target_demographics or [],
         "brand_guidelines": company.brand_guidelines or {},
+        "referral_target_states": company.referral_target_states or [],
     }
     return company
 

@@ -3,7 +3,15 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { companiesApi, llmSettingsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, RefreshCw, Zap, Bot, ExternalLink } from "lucide-react";
+import { CheckCircle2, RefreshCw, Zap, Bot, MapPin } from "lucide-react";
+
+const US_STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
+];
 
 const PROVIDER_META: Record<string, { color: string; bg: string; border: string; logo: string }> = {
   anthropic: { color: "text-orange-700",  bg: "bg-orange-50",   border: "border-orange-300",  logo: "🟠" },
@@ -20,6 +28,10 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
+  // NPPES target states
+  const [targetStates, setTargetStates] = useState<string[]>([]);
+  const [statesSaved, setStatesSaved] = useState(false);
+
   // LLM Provider
   const [providers, setProviders] = useState<any[]>([]);
   const [activeProvider, setActiveProvider] = useState("anthropic");
@@ -34,10 +46,12 @@ export default function SettingsPage() {
     Promise.all([
       companiesApi.credentialStatus(companyId).catch(() => ({ data: { credentials: [] } })),
       llmSettingsApi.providers().catch(() => ({ data: { providers: [], active_provider: "anthropic" } })),
-    ]).then(([cr, pr]) => {
+      companiesApi.get(companyId).catch(() => ({ data: {} })),
+    ]).then(([cr, pr, co]) => {
       setSlots(cr.data.credentials || []);
       setProviders(pr.data.providers || []);
       setActiveProvider(pr.data.active_provider || "anthropic");
+      setTargetStates(co.data.referral_target_states || []);
     }).finally(() => setLoading(false));
   }, [companyId]);
 
@@ -47,6 +61,18 @@ export default function SettingsPage() {
     setSaved((p) => ({ ...p, [key]: true }));
     setSlots((prev) => prev.map((s) => (s.key === key ? { ...s, connected: true } : s)));
     setTimeout(() => setSaved((p) => ({ ...p, [key]: false })), 2000);
+  }
+
+  function toggleState(abbr: string) {
+    setTargetStates((prev) =>
+      prev.includes(abbr) ? prev.filter((s) => s !== abbr) : [...prev, abbr]
+    );
+  }
+
+  async function handleSaveStates() {
+    await companiesApi.update(companyId, { referral_target_states: targetStates });
+    setStatesSaved(true);
+    setTimeout(() => setStatesSaved(false), 2000);
   }
 
   async function handleSwitchProvider(providerId: string) {
@@ -283,6 +309,60 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* ── NPPES Lead Search States ───────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-blue-500" />
+          <h2 className="font-semibold text-gray-800">NPPES Lead Search</h2>
+          <span className="ml-auto text-xs text-gray-400">States to search for referral leads</span>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-500">
+            Select the states where you want to find referral leads via NPPES. If none are selected, leads will be sourced from your company&apos;s configured locations.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {US_STATES.map((abbr) => {
+              const selected = targetStates.includes(abbr);
+              return (
+                <button
+                  key={abbr}
+                  onClick={() => toggleState(abbr)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors",
+                    selected
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
+                  )}
+                >
+                  {abbr}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSaveStates}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                statesSaved
+                  ? "bg-green-100 text-green-700"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              )}
+            >
+              {statesSaved ? "Saved ✓" : `Save${targetStates.length ? ` (${targetStates.length} selected)` : ""}`}
+            </button>
+            {targetStates.length > 0 && (
+              <button
+                onClick={() => setTargetStates([])}
+                className="text-sm text-gray-400 hover:text-gray-600"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── File uploads ───────────────────────────────────────────────────── */}

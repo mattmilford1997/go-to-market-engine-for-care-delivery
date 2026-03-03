@@ -132,14 +132,22 @@ async def generate_lead_list_for_company(
 
     all_leads = {}  # NPI → lead dict to deduplicate
 
+    # Use explicitly configured target states if set, otherwise fall back to company locations
+    target_states = company_data.get("referral_target_states") or []
+
     tasks = []
-    for location in locations[:3]:  # process up to 3 locations
-        city = location.get("city", "")
-        state = location.get("state", "")
-        if not city or not state:
-            continue
-        for taxonomy in taxonomy_codes[:4]:  # limit taxonomy queries per location
-            tasks.append(query_nppes(city=city, state=state, taxonomy_code=taxonomy, limit=200))
+    if target_states:
+        for state in target_states[:10]:  # cap at 10 states
+            for taxonomy in taxonomy_codes[:4]:
+                tasks.append(query_nppes(city="", state=state.upper(), taxonomy_code=taxonomy, limit=200))
+    else:
+        for location in locations[:3]:  # process up to 3 locations
+            city = location.get("city", "")
+            state = location.get("state", "")
+            if not city or not state:
+                continue
+            for taxonomy in taxonomy_codes[:4]:  # limit taxonomy queries per location
+                tasks.append(query_nppes(city=city, state=state, taxonomy_code=taxonomy, limit=200))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
