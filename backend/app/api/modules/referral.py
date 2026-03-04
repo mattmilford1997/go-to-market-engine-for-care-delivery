@@ -576,12 +576,19 @@ async def _generate_postcard_bg(company_id: str, company_data: dict):
 # ------------------------------------------------------------------ #
 
 def _add_to_approval_queue(db, company_id, content_item, module, type_label):
+    # Always include body_preview so the approval UI can render the content.
+    # Merge extra_data with body_preview and content_type so the frontend
+    # ApprovalPreview component has everything it needs.
+    preview: dict = dict(content_item.extra_data or {})
+    if content_item.body:
+        preview["body_preview"] = content_item.body[:500]
+    preview["content_type"] = content_item.content_type
     item = ApprovalItem(
         company_id=company_id,
         content_item_id=content_item.id,
         item_type=type_label.lower().replace(" ", "_"),
         title=content_item.title,
-        preview_data=content_item.extra_data or {},
+        preview_data=preview,
         module=module,
     )
     db.add(item)

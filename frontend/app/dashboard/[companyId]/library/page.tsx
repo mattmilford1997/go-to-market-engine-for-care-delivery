@@ -19,7 +19,146 @@ const CONTENT_TYPES = [
   "directory_bio",
 ];
 
-const STATUS_FILTERS = ["all", "pending_review", "approved", "published", "rejected"];
+const STATUS_FILTERS = ["all", "pending_review", "approved", "published", "rejected", "draft"];
+
+function ContentPreview({ item }: { item: any }) {
+  const ct: string = item.content_type || "";
+  const body: string = item.body || "";
+  const extra: Record<string, any> = item.extra_data || {};
+
+  // Blog post
+  if (ct === "blog_post") {
+    if (body) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{body}</p>
+          {extra.word_count && <p className="text-xs text-gray-400">{extra.word_count} words · {extra.theme || ""}</p>}
+          {item.target_keyword && (
+            <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">
+              Keyword: {item.target_keyword}
+            </span>
+          )}
+          {item.meta_description && (
+            <p className="text-xs text-gray-500 italic border-l-2 border-gray-200 pl-2">{item.meta_description}</p>
+          )}
+        </div>
+      );
+    }
+    // Planned but not yet generated
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+          <span>⏳</span>
+          <span>This blog post is planned but not yet generated. Click "Generate Blog Post" in the Content module to produce the full article.</span>
+        </div>
+        {extra.theme && <p className="text-xs text-gray-500">Theme: {extra.theme}</p>}
+        {extra.word_count && <p className="text-xs text-gray-400">Target length: {extra.word_count} words</p>}
+        {item.target_keyword && <p className="text-xs text-gray-400">Keyword: {item.target_keyword}</p>}
+      </div>
+    );
+  }
+
+  // Social posts
+  if (ct.startsWith("social_")) {
+    const platform = ct.replace("social_", "");
+    const hashtags: string[] = extra.hashtags || [];
+    return (
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{platform} post</p>
+        {body && <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{body}</p>}
+        {hashtags.length > 0 && (
+          <p className="text-xs text-blue-500">{hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}</p>
+        )}
+        {extra.image_concept && (
+          <div className="flex items-start gap-2 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2">
+            <span className="text-purple-400 text-sm shrink-0">🖼</span>
+            <p className="text-xs text-purple-700 italic">{extra.image_concept}</p>
+          </div>
+        )}
+        {(extra.best_days?.length > 0 || extra.best_times?.length > 0) && (
+          <p className="text-xs text-gray-400">
+            Best time to post: {(extra.best_days || []).join(", ")} @ {(extra.best_times || []).join(", ")}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // Voicemail script
+  if (ct === "voicemail_script") {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Voicemail Script</p>
+        {body ? (
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-lg p-3 border border-gray-100">{body}</p>
+        ) : (
+          <p className="text-xs text-gray-400 italic">No script content yet.</p>
+        )}
+      </div>
+    );
+  }
+
+  // Fax sheet / postcard / email sequence
+  if (ct === "fax_sheet" || ct === "postcard" || ct === "email_sequence") {
+    return (
+      <div className="space-y-2">
+        {body && <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{body}</p>}
+        {Object.keys(extra).length > 0 && (
+          <dl className="space-y-1 mt-2">
+            {Object.entries(extra).slice(0, 8).map(([k, v]) => (
+              <div key={k} className="flex gap-2 text-xs">
+                <dt className="text-gray-400 shrink-0 capitalize">{k.replace(/_/g, " ")}:</dt>
+                <dd className="text-gray-700">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    );
+  }
+
+  // Ad copy
+  if (ct.startsWith("ad_copy_")) {
+    return (
+      <div className="space-y-1.5">
+        {extra.headline_1 && <p className="text-sm font-semibold text-gray-800">{extra.headline_1}</p>}
+        {extra.description && <p className="text-xs text-gray-500">{extra.description}</p>}
+        {extra.primary_text && <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{extra.primary_text}</p>}
+        {body && !extra.headline_1 && <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{body}</p>}
+        {extra.keyword_cluster && <p className="text-xs text-gray-400">Cluster: {extra.keyword_cluster}</p>}
+      </div>
+    );
+  }
+
+  // Directory bio
+  if (ct === "directory_bio") {
+    return (
+      <div className="space-y-1.5">
+        {extra.platform && <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{extra.platform}</p>}
+        {body && <p className="text-sm text-gray-700 leading-relaxed">{body}</p>}
+      </div>
+    );
+  }
+
+  // Generic fallback — show body if available, then extra_data
+  if (body) {
+    return <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{body}</p>;
+  }
+  if (Object.keys(extra).length > 0) {
+    return (
+      <dl className="space-y-1">
+        {Object.entries(extra).map(([k, v]) => (
+          <div key={k} className="flex gap-2 text-xs">
+            <dt className="text-gray-400 shrink-0 capitalize">{k.replace(/_/g, " ")}:</dt>
+            <dd className="text-gray-700">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+
+  return <p className="text-xs text-gray-400 italic">No preview available for this item.</p>;
+}
 
 export default function LibraryPage() {
   const { companyId } = useParams<{ companyId: string }>();
@@ -116,8 +255,10 @@ export default function LibraryPage() {
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3">
                       <p className="font-medium text-gray-800">{truncate(item.title || "", 60)}</p>
-                      {item.body_preview && (
-                        <p className="text-xs text-gray-400 mt-0.5">{truncate(item.body_preview, 80)}</p>
+                      {(item.body || item.extra_data?.theme) && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {truncate(item.body || item.extra_data?.theme || "", 80)}
+                        </p>
                       )}
                     </td>
                     <td className="px-5 py-3 text-gray-500 text-xs">
@@ -143,10 +284,8 @@ export default function LibraryPage() {
                   </tr>
                   {expandedId === item.id && (
                     <tr key={`${item.id}-expanded`}>
-                      <td colSpan={6} className="px-5 py-4 bg-gray-50">
-                        <pre className="text-xs text-gray-700 whitespace-pre-wrap max-h-64 overflow-y-auto">
-                          {item.body_preview || JSON.stringify(item.metadata, null, 2)}
-                        </pre>
+                      <td colSpan={6} className="px-5 py-4 bg-gray-50 border-t border-gray-100">
+                        <ContentPreview item={item} />
                       </td>
                     </tr>
                   )}

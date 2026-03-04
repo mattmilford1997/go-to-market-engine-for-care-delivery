@@ -117,6 +117,36 @@ async def bulk_approve(
     return {"approved_count": len(items)}
 
 
+@router.post("/{company_id}/bulk-delete")
+async def bulk_delete(
+    company_id: str,
+    payload: dict,  # {"item_ids": [...]} or {"module": "..."} for delete-all
+    db: Session = Depends(get_db),
+):
+    query = db.query(ApprovalItem).filter(
+        ApprovalItem.company_id == company_id,
+        ApprovalItem.status == "pending",
+    )
+
+    if payload.get("item_ids"):
+        query = query.filter(ApprovalItem.id.in_(payload["item_ids"]))
+    elif payload.get("module"):
+        query = query.filter(ApprovalItem.module == payload["module"])
+
+    items = query.all()
+    deleted_count = len(items)
+    for item in items:
+        # Mark linked content item as rejected
+        if item.content_item_id:
+            ci = db.query(ContentItem).filter(ContentItem.id == item.content_item_id).first()
+            if ci:
+                ci.status = ContentStatus.rejected
+        db.delete(item)
+
+    db.commit()
+    return {"deleted_count": deleted_count}
+
+
 @router.get("/{company_id}/history")
 async def approval_history(
     company_id: str,

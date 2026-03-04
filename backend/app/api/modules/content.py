@@ -257,6 +257,9 @@ async def _generate_calendar_bg(company_id: str, company_data: dict):
                     },
                 )
                 db.add(ci)
+                db.flush()
+                # Add planned blog posts to approval queue so they appear for review/generation
+                _add_approval_item(db, company_id, ci, "content", "Blog Post")
         db.flush()
 
         # Generate social posts (5 per platform, 3 platforms = 3 LLM calls)

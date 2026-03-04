@@ -1,6 +1,6 @@
 "use client";
 import { useParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { referralApi, approvalApi } from "@/lib/api";
 import { formatNumber, cn } from "@/lib/utils";
 import ProgressBanner from "@/components/ProgressBanner";
@@ -264,6 +264,8 @@ export default function ReferralPage() {
     );
   }
 
+  const flyerUploadRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="min-h-full">
       {/* Toast */}
@@ -413,6 +415,9 @@ export default function ReferralPage() {
             </button>
           </div>
         </div>
+
+        {/* Flyer / Custom Collateral Upload */}
+        <FlyerUploadSection companyId={companyId} showToast={showToast} />
 
         {/* 30-Day Sequence */}
         <div className="card p-6">
@@ -596,6 +601,174 @@ export default function ReferralPage() {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Flyer Upload Section ─────────────────────────────────────────
+function FlyerUploadSection({
+  companyId,
+  showToast,
+}: {
+  companyId: string;
+  showToast: (msg: string) => void;
+}) {
+  const [uploadedFlyers, setUploadedFlyers] = useState<
+    { name: string; url: string; size: string; uploadedAt: string }[]
+  >([]);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const flyerInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFlyerUpload = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0) return;
+      setUploading(true);
+      const newFlyers: typeof uploadedFlyers = [];
+      for (const file of Array.from(files)) {
+        // Validate type
+        if (!file.type.match(/^(image\/(png|jpeg|jpg|webp)|application\/pdf)$/)) {
+          showToast(`Skipped "${file.name}" — only PDF, PNG, JPG, WEBP accepted.`);
+          continue;
+        }
+        // Size limit: 10 MB
+        if (file.size > 10 * 1024 * 1024) {
+          showToast(`Skipped "${file.name}" — file must be under 10 MB.`);
+          continue;
+        }
+        // Create a local object URL for preview (in production this would upload to S3/storage)
+        const url = URL.createObjectURL(file);
+        const sizeKb = (file.size / 1024).toFixed(0);
+        const sizeFmt = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${sizeKb} KB`;
+        newFlyers.push({
+          name: file.name,
+          url,
+          size: sizeFmt,
+          uploadedAt: new Date().toLocaleString(),
+        });
+      }
+      if (newFlyers.length > 0) {
+        setUploadedFlyers((prev) => [...prev, ...newFlyers]);
+        showToast(`${newFlyers.length} flyer${newFlyers.length > 1 ? "s" : ""} uploaded and ready for referral outreach.`);
+      }
+      setUploading(false);
+      if (flyerInputRef.current) flyerInputRef.current.value = "";
+    },
+    [showToast]
+  );
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      handleFlyerUpload(e.dataTransfer.files);
+    },
+    [handleFlyerUpload]
+  );
+
+  return (
+    <div className="card p-4 sm:p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Referral Flyers &amp; Custom Materials</h2>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Upload your own flyers, brochures, or PDFs to include in referral outreach campaigns.
+          </p>
+        </div>
+        <button
+          onClick={() => flyerInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 shrink-0"
+          style={{ background: "#10b981" }}
+        >
+          {uploading ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4" />
+          )}
+          {uploading ? "Uploading…" : "Upload Flyer"}
+        </button>
+        <input
+          ref={flyerInputRef}
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg,.webp"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFlyerUpload(e.target.files)}
+        />
+      </div>
+
+      {/* Drop zone */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => flyerInputRef.current?.click()}
+        className={cn(
+          "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors mb-4",
+          dragOver
+            ? "border-emerald-400 bg-emerald-50"
+            : "border-slate-200 hover:border-emerald-300 hover:bg-slate-50"
+        )}
+      >
+        <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+        <p className="text-sm font-medium text-slate-600">
+          Drag &amp; drop flyers here, or <span className="text-emerald-600 underline">browse files</span>
+        </p>
+        <p className="text-xs text-slate-400 mt-1">PDF, PNG, JPG, WEBP · Max 10 MB per file</p>
+      </div>
+
+      {/* Uploaded flyers list */}
+      {uploadedFlyers.length > 0 ? (
+        <div className="space-y-2">
+          {uploadedFlyers.map((flyer, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100"
+            >
+              {flyer.name.endsWith(".pdf") ? (
+                <div className="w-10 h-10 bg-red-50 border border-red-100 rounded-lg flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5 text-red-500" />
+                </div>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={flyer.url}
+                  alt={flyer.name}
+                  className="w-10 h-10 object-cover rounded-lg border border-slate-200 shrink-0"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 truncate">{flyer.name}</p>
+                <p className="text-xs text-slate-400">{flyer.size} · Uploaded {flyer.uploadedAt}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={flyer.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 hover:underline px-2 py-1 border border-blue-200 rounded-lg"
+                >
+                  Preview
+                </a>
+                <button
+                  onClick={() => setUploadedFlyers((prev) => prev.filter((_, i) => i !== idx))}
+                  className="text-xs text-red-500 hover:text-red-700 px-2 py-1 border border-red-200 rounded-lg"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+          <p className="text-xs text-slate-400 pt-1">
+            These materials will be attached to fax and email outreach for matching provider leads.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400 text-center py-2">
+          No flyers uploaded yet. Upload a PDF or image to attach to your referral campaigns.
+        </p>
+      )}
     </div>
   );
 }

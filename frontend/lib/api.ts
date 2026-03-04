@@ -60,6 +60,8 @@ export const approvalApi = {
     }),
   bulkApprove: (companyId: string, payload: { item_ids?: string[]; module?: string }) =>
     api.post(`/approval/${companyId}/bulk-approve`, payload),
+  bulkDelete: (companyId: string, payload: { item_ids?: string[]; module?: string }) =>
+    api.post(`/approval/${companyId}/bulk-delete`, payload),
   history: (companyId: string) => api.get(`/approval/${companyId}/history`),
 };
 
