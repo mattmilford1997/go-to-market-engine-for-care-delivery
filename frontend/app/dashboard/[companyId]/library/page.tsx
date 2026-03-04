@@ -285,42 +285,172 @@ function VoicemailPreview({ item }: { item: any }) {
 
 function FaxSheetPreview({ item }: { item: any }) {
   const extra = item.extra_data || {};
+  // Support both old schema (why_refer_points) and new schema (why_refer_bullets)
+  const whyReferBullets: string[] = extra.why_refer_bullets || extra.why_refer_points || [];
+  const statCallouts: any[] = extra.stat_callouts || [];
+  const intakeSteps: any[] = extra.intake_steps || [];
+  const faxBackForm = extra.fax_back_form || {};
+  const footerContact = extra.footer_contact || {};
+  const relevantServices: string[] = extra.relevant_services || extra.key_services_for_this_specialty || [];
+  const primaryCta = extra.primary_cta || {};
+
   return (
-    <div className="space-y-4">
-      {extra.target_specialty && (
-        <Section label="Target Specialty"><Tag color="blue">{extra.target_specialty}</Tag></Section>
-      )}
-      {extra.headline && (
-        <Section label="Headline">
-          <p className="text-lg font-bold text-gray-800">{extra.headline}</p>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="bg-gray-900 text-white rounded-xl p-5">
+        {extra.subject_line && (
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Subject Line</p>
+        )}
+        {extra.subject_line && (
+          <p className="text-sm text-gray-300 mb-3 font-medium">{extra.subject_line}</p>
+        )}
+        {extra.target_specialty && (
+          <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30 mb-3">
+            Targeting: {extra.target_specialty}
+          </span>
+        )}
+        {extra.headline && (
+          <h2 className="text-xl font-black text-white leading-tight mb-1">{extra.headline}</h2>
+        )}
+        {extra.tagline && (
+          <p className="text-sm text-gray-300 italic">{extra.tagline}</p>
+        )}
+      </div>
+
+      {/* Opening Hook */}
+      {extra.opening_hook && (
+        <Section label="Opening Hook">
+          <p className="text-sm text-gray-700 leading-relaxed bg-blue-50 border border-blue-100 rounded-lg p-3">{extra.opening_hook}</p>
         </Section>
       )}
-      {extra.tagline && (
-        <Section label="Tagline">
-          <p className="text-sm text-gray-600 italic">{extra.tagline}</p>
-        </Section>
-      )}
-      {item.body && (
-        <Section label="Full Content">
-          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap max-h-80 overflow-y-auto">
-            {item.body}
+
+      {/* Stat Callouts */}
+      {statCallouts.length > 0 && (
+        <Section label="Social Proof — Stat Callouts">
+          <div className="grid grid-cols-3 gap-3">
+            {statCallouts.map((s: any, i: number) => (
+              <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+                <p className="text-2xl font-black text-gray-900">{s.stat}</p>
+                <p className="text-xs text-gray-500 mt-1 leading-snug">{s.description}</p>
+              </div>
+            ))}
           </div>
         </Section>
       )}
-      {extra.why_refer_points?.length > 0 && (
-        <Section label="Why Refer Points">
-          <ul className="space-y-1">
-            {extra.why_refer_points.map((p: string, i: number) => (
+
+      {/* Why Refer Bullets */}
+      {whyReferBullets.length > 0 && (
+        <Section label="Why Refer — Scannable Bullets">
+          <ul className="space-y-2">
+            {whyReferBullets.map((p: string, i: number) => (
               <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                <span className="text-green-500 shrink-0">✓</span>{p}
+                <span className="text-green-500 shrink-0 font-bold mt-0.5">✓</span>
+                <span>{p}</span>
               </li>
             ))}
           </ul>
         </Section>
       )}
-      {extra.footer_cta && (
-        <Section label="Call to Action">
-          <p className="text-sm font-semibold text-blue-700">{extra.footer_cta}</p>
+
+      {/* Two-column: Services + Intake */}
+      <div className="grid grid-cols-2 gap-4">
+        {relevantServices.length > 0 && (
+          <Section label="Relevant Services">
+            <ul className="space-y-1">
+              {relevantServices.map((s: string, i: number) => (
+                <li key={i} className="text-sm text-gray-700 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />{s}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+        {intakeSteps.length > 0 && (
+          <Section label="3-Step Intake Process">
+            <ol className="space-y-2">
+              {intakeSteps.map((step: any, i: number) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                  <span className="w-5 h-5 rounded-full bg-gray-900 text-white text-xs flex items-center justify-center shrink-0 font-bold">{step.step || i + 1}</span>
+                  <span>{step.action}</span>
+                </li>
+              ))}
+            </ol>
+          </Section>
+        )}
+      </div>
+
+      {/* Insurance + Availability */}
+      {(extra.insurance_line || extra.insurance_section) && (
+        <Section label="Insurance / Access">
+          <p className="text-sm text-gray-700">{extra.insurance_line || extra.insurance_section}</p>
+        </Section>
+      )}
+      {extra.availability_note && (
+        <Section label="Availability">
+          <p className="text-sm font-semibold text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{extra.availability_note}</p>
+        </Section>
+      )}
+
+      {/* Primary CTA */}
+      {(primaryCta.phone || extra.footer_cta) && (
+        <Section label="Primary Call to Action">
+          <div className="bg-gray-900 text-white rounded-xl p-4 text-center">
+            <p className="text-xs text-gray-400 mb-1">{primaryCta.action || "Call to Refer"}</p>
+            <p className="text-2xl font-black tracking-wide">{primaryCta.phone || ""}</p>
+            {primaryCta.secondary && <p className="text-xs text-gray-400 mt-1">{primaryCta.secondary}</p>}
+            {extra.footer_cta && !primaryCta.phone && <p className="text-sm font-semibold">{extra.footer_cta}</p>}
+          </div>
+        </Section>
+      )}
+
+      {/* Fax-Back Form */}
+      {(faxBackForm.fields?.length > 0 || extra.fax_back_form) && (
+        <Section label="Fax-Back Referral Form (Tear-Off)">
+          <div className="border-2 border-dashed border-gray-300 rounded-xl p-4">
+            <p className="text-xs text-gray-400 text-center mb-3 uppercase tracking-widest">✂ Cut here</p>
+            <p className="text-sm font-bold text-gray-800 mb-3">{faxBackForm.title || "Referral Request Form"}</p>
+            <div className="space-y-2">
+              {(faxBackForm.fields || []).map((field: string, i: number) => (
+                <div key={i} className="border-b border-gray-200 pb-2">
+                  <p className="text-xs text-gray-500">{field}</p>
+                  <div className="h-4" />
+                </div>
+              ))}
+            </div>
+            {faxBackForm.return_fax && (
+              <p className="text-xs text-gray-500 mt-3 text-center">Return fax to: <strong>{faxBackForm.return_fax}</strong></p>
+            )}
+          </div>
+        </Section>
+      )}
+
+      {/* Footer */}
+      {(footerContact.phone || footerContact.website || footerContact.fax) && (
+        <div className="flex gap-4 text-xs text-gray-500 border-t border-gray-100 pt-3">
+          {footerContact.phone && <span>📞 {footerContact.phone}</span>}
+          {footerContact.website && <span>🌐 {footerContact.website}</span>}
+          {footerContact.fax && <span>📠 {footerContact.fax}</span>}
+        </div>
+      )}
+
+      {/* Opt-Out */}
+      {extra.opt_out_text && (
+        <p className="text-xs text-gray-400 italic">{extra.opt_out_text}</p>
+      )}
+
+      {/* Design Notes */}
+      {extra.design_notes && (
+        <Section label="Designer Layout Notes">
+          <p className="text-xs text-gray-500 bg-yellow-50 border border-yellow-100 rounded-lg p-3 italic">{extra.design_notes}</p>
+        </Section>
+      )}
+
+      {/* Fallback: old intro_paragraph */}
+      {!extra.headline && item.body && (
+        <Section label="Content">
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap max-h-80 overflow-y-auto">
+            {item.body}
+          </div>
         </Section>
       )}
     </div>

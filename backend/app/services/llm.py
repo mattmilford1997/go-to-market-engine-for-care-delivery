@@ -295,21 +295,98 @@ Return JSON:
     # ── Module 2: Referral Marketing ───────────────────────────────────────
 
     def generate_fax_sheet_content(self, company_data: dict, target_specialty: str) -> dict:
-        system = "You are a healthcare referral marketing specialist. Return ONLY valid JSON."
-        prompt = f"""Generate a referral fax sheet for {company_data['company_name']} targeting {target_specialty}.
+        system = (
+            "You are an expert healthcare referral marketing specialist with 15+ years experience "
+            "creating physician-to-physician fax flyers for specialty practices. "
+            "You know that effective fax marketing must be: (1) scannable in under 10 seconds, "
+            "(2) black-and-white print-safe with no color dependency, (3) one page only, "
+            "(4) action-oriented with a single clear CTA, (5) credibility-driven with real stats. "
+            "Return ONLY valid JSON."
+        )
+        name = company_data.get('company_name', '')
+        specialty_niche = company_data.get('specialty_niche', '')
+        services = company_data.get('services', [])
+        insurance = company_data.get('insurance_accepted', [])
+        differentiators = company_data.get('differentiators', [])
+        locations = company_data.get('locations', [])
+        phone = company_data.get('phone', '[PHONE]')
+        website = company_data.get('website_url', '[WEBSITE]')
+        fax_number = company_data.get('fax', '[FAX NUMBER]')
 
-Services: {json.dumps(company_data.get('services', [])[:5])}
-Insurance: {', '.join(company_data.get('insurance_accepted', [])[:15])}
-Differentiators: {', '.join(company_data.get('differentiators', [])[:5])}
-Locations: {json.dumps(company_data.get('locations', [])[:3])}
+        prompt = f"""Create a high-converting one-page physician referral fax flyer for {name} \
+targeting {target_specialty} providers.
 
-Return JSON:
+PRACTICE CONTEXT:
+- Specialty niche: {specialty_niche}
+- Services: {json.dumps([s.get('name','') for s in services[:8]])}
+- Insurance accepted: {', '.join(insurance[:20])}
+- Differentiators: {json.dumps(differentiators[:6])}
+- Locations: {json.dumps(locations[:3])}
+- Phone: {phone}
+- Website: {website}
+- Fax: {fax_number}
+
+BEST PRACTICES TO IMPLEMENT:
+1. HEADLINE: Bold, benefit-driven, ≤10 words. Must immediately answer "why refer here?"
+   Example pattern: "[Specialty] Patients Get [Outcome] — Fast Intake, [Insurance] Accepted"
+2. SUBJECT LINE: 50 chars max, catchy, uses an action verb or urgency word ("Now Accepting", "New Service", "Faster Access")
+3. OPENING HOOK: 2-sentence max. Lead with the referring physician's pain point (e.g., "Your patients with treatment-resistant depression deserve faster access to specialized care.") NOT with the practice's name.
+4. SOCIAL PROOF / STATS SECTION: Include 2-3 verifiable or plausible outcome statistics specific to the specialty being targeted. Format as bold callout numbers (e.g., "85% of patients see improvement within 6 weeks").
+5. WHY REFER — BULLET POINTS: 4-5 scannable bullets, each ≤15 words. Focus on what matters to the referring physician: ease of referral, patient outcomes, communication back to referring provider, insurance coverage, and speed of access.
+6. SERVICES RELEVANT TO THIS SPECIALTY: List only the 3-5 services most relevant to {target_specialty}. Do NOT list all services.
+7. INSURANCE / ACCESS: One clear sentence about insurance. Include "Most major plans accepted" if broadly true. Mention self-pay or sliding scale if applicable.
+8. INTAKE PROCESS (3 simple steps): Make it dead simple. E.g., "1. Fax referral form below  2. We call patient within 24 hours  3. You receive a care coordination note"
+9. AVAILABILITY NOTE: Urgency-creating but honest. E.g., "New patient appointments available within [X] business days" or "Same-week intake for urgent cases."
+10. SINGLE CLEAR CTA: One primary action only. Phone number in large format. Do NOT list multiple CTAs.
+11. FAX-BACK REFERRAL FORM: Tear-off style. Keep to 6 fields max. Include urgency checkbox (Routine / Urgent / ASAP).
+12. BRAND CONSISTENCY: Use the practice name consistently. Tone: warm but clinically credible. No exclamation points. No ALL CAPS except for the headline.
+13. COMPLIANCE: Include opt-out line. No guaranteed outcome claims. HIPAA-safe language.
+14. DESIGN NOTES: Describe the layout for the designer — where the header goes, where the fax-back form sits (bottom third), where the stat callouts appear.
+
+Return a single JSON object:
 {{
-  "headline": "...", "tagline": "...", "intro_paragraph": "...",
-  "key_services_for_this_specialty": ["..."], "why_refer_points": ["..."],
-  "insurance_section": "...", "intake_process": "...", "availability_note": "...",
-  "fax_back_form": {{"title": "Referral Request", "fields": ["Patient Name", "DOB", "Referring Provider", "Reason for Referral", "Urgency", "Best Contact"]}},
-  "footer_cta": "...", "opt_out_text": "To stop receiving faxes, fax REMOVE to [FAX NUMBER]"
+  "subject_line": "50-char max catchy subject for the fax cover",
+  "headline": "Bold benefit-driven headline ≤10 words",
+  "tagline": "Supporting subheadline 1 sentence",
+  "opening_hook": "2-sentence opening that leads with the referring physician's pain point",
+  "stat_callouts": [
+    {{"stat": "85%", "description": "of patients see symptom improvement within 6 weeks"}},
+    {{"stat": "48 hrs", "description": "average time to first appointment for new referrals"}},
+    {{"stat": "95%", "description": "of referring providers receive a care coordination note within 5 days"}}
+  ],
+  "why_refer_bullets": [
+    "Bullet 1 ≤15 words focused on ease/speed",
+    "Bullet 2 ≤15 words focused on patient outcomes",
+    "Bullet 3 ≤15 words focused on communication back to referring provider",
+    "Bullet 4 ≤15 words focused on insurance/access",
+    "Bullet 5 ≤15 words focused on a unique differentiator"
+  ],
+  "relevant_services": ["Service 1", "Service 2", "Service 3"],
+  "insurance_line": "One sentence about insurance accepted",
+  "intake_steps": [
+    {{"step": 1, "action": "Fax the referral form below or call [PHONE]"}},
+    {{"step": 2, "action": "We contact your patient within 24 business hours"}},
+    {{"step": 3, "action": "You receive a care coordination note within 5 days"}}
+  ],
+  "availability_note": "New patient appointments available within X business days",
+  "primary_cta": {{
+    "action": "Call to refer",
+    "phone": "{phone}",
+    "secondary": "Or fax referral form below to {fax_number}"
+  }},
+  "fax_back_form": {{
+    "title": "Referral Request Form — {name}",
+    "fields": ["Patient Name", "Date of Birth", "Referring Provider Name & NPI", "Reason for Referral / Diagnosis", "Urgency: [ ] Routine  [ ] Urgent  [ ] ASAP", "Best Phone to Reach Patient"],
+    "return_fax": "{fax_number}"
+  }},
+  "footer_contact": {{
+    "phone": "{phone}",
+    "website": "{website}",
+    "fax": "{fax_number}"
+  }},
+  "opt_out_text": "To stop receiving faxes from {name}, fax REMOVE to {fax_number}",
+  "design_notes": "Describe the one-page layout: header zone (top 20%), stat callout bar (below header), two-column body (why refer bullets left, services + intake right), fax-back form (bottom 30% separated by dashed cut line). Black and white print safe.",
+  "intro_paragraph": "A 3-4 sentence summary paragraph combining the opening hook and key value proposition, suitable for use as the body text if the structured layout is not used."
 }}"""
         return self._chat_json(prompt, system=system, max_tokens=8192)
 
