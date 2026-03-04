@@ -399,7 +399,7 @@ async def generate_reddit_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "reddit")
+    background_tasks.add_task(_generate_reddit_ads_bg, company_id, _company_data(company))
     return {"status": "generating", "platform": "reddit"}
 
 
@@ -429,7 +429,7 @@ async def generate_quora_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "quora")
+    background_tasks.add_task(_generate_quora_ads_bg, company_id, _company_data(company))
     return {"status": "generating", "platform": "quora"}
 
 
@@ -474,25 +474,17 @@ async def generate_pinterest_ads(
     db: Session = Depends(get_db),
 ):
     company = _get_company(company_id, db)
-    background_tasks.add_task(_generate_platform_ads_bg, company_id, _company_data(company), "pinterest")
+    background_tasks.add_task(_generate_pinterest_ads_bg, company_id, _company_data(company))
     return {"status": "generating", "platform": "pinterest"}
 
 
 # ------------------------------------------------------------------ #
-# Platform-specific background generator
+# Platform-specific background generators
 # ------------------------------------------------------------------ #
 
-# Per-platform JSON prompt templates.  {name} and {niche} are substituted at runtime.
-# Each prompt asks the LLM to return {"ads": [...]} with platform-specific fields.
+# ── Simple inline-prompt platforms (Microsoft, TikTok, LinkedIn) ──────────────
+
 PLATFORM_PROMPTS = {
-    "reddit": (
-        "You are a Reddit ads specialist for healthcare. "
-        "Generate 3 Reddit Promoted Posts for {name}, a {niche} clinic. "
-        "Tone: genuine, non-salesy, community-first — Reddit users flag obvious ads immediately. "
-        "Target subreddits: r/depression, r/anxiety, r/mentalhealth, r/TMS. "
-        "Return ONLY valid JSON (no markdown fences): "
-        '{"ads": [{"title": "Reddit-style post title", "body": "2-3 paragraph body that leads with genuine value before mentioning the clinic", "cta": "soft call to action", "subreddit": "r/..."}]}'
-    ),
     "microsoft": (
         "You are a Microsoft Advertising specialist for healthcare. "
         "Generate 3 Bing Responsive Search Ads for {name}, a {niche} clinic. "
@@ -502,15 +494,6 @@ PLATFORM_PROMPTS = {
         '{"ads": [{"headline_1": "≤30 chars", "headline_2": "≤30 chars", "headline_3": "≤30 chars", '
         '"description_1": "≤90 chars", "description_2": "≤90 chars", '
         '"sitelinks": [{"text": "sitelink label", "description": "one line"}]}]}'
-    ),
-    "quora": (
-        "You are a Quora Ads specialist for healthcare. "
-        "Generate 3 Quora Promoted Answer Ads for {name}, a {niche} clinic. "
-        "Each answer must genuinely address the patient question in the first 2 sentences before softly referencing the clinic. "
-        "Return ONLY valid JSON: "
-        '{"ads": [{"question": "question a patient would search on Quora", '
-        '"answer": "4-6 sentence answer that leads with genuine info, then softly mentions the clinic", '
-        '"cta": "call to action text"}]}'
     ),
     "tiktok": (
         "You are a TikTok Ads specialist for healthcare. "
@@ -532,45 +515,27 @@ PLATFORM_PROMPTS = {
         '{"ads": [{"headline": "≤150 chars", "intro_text": "≤600 chars compelling intro", '
         '"cta_label": "Learn More|Contact Us|Get Started|Download"}]}'
     ),
-    "pinterest": (
-        "You are a Pinterest Ads specialist for healthcare and wellness brands. "
-        "Generate 3 Pinterest Promoted Pin ads for {name}, a {niche} clinic. "
-        "Target: women 25-54 interested in wellness, mental health, self-care. Warm, aspirational tone. "
-        "Return ONLY valid JSON: "
-        '{"ads": [{"title": "≤100 chars", "description": "≤500 chars warm description", '
-        '"image_concept": "visual concept for the pin image", '
-        '"hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]}]}'
-    ),
 }
 
-# Human-readable field used as the body preview in the approval queue per platform
 _PLATFORM_BODY_FIELD = {
-    "reddit": "body",
     "microsoft": "description_1",
-    "quora": "answer",
     "tiktok": "voiceover",
     "linkedin": "intro_text",
-    "pinterest": "description",
 }
 
-# Ad title templates per platform
 _PLATFORM_AD_TITLE = {
-    "reddit": lambda ad, name, i: ad.get("title", f"Reddit Ad #{i} — {name}"),
     "microsoft": lambda ad, name, i: f"Bing RSA #{i} — {ad.get('headline_1', name)}",
-    "quora": lambda ad, name, i: ad.get("question", f"Quora Ad #{i} — {name}"),
     "tiktok": lambda ad, name, i: f"TikTok Script #{i} — {ad.get('hook', name)}",
     "linkedin": lambda ad, name, i: ad.get("headline", f"LinkedIn Ad #{i} — {name}"),
-    "pinterest": lambda ad, name, i: ad.get("title", f"Pinterest Pin #{i} — {name}"),
 }
 
 
 async def _generate_platform_ads_bg(company_id: str, company_data: dict, platform: str):
+    """Background task for Microsoft, TikTok, and LinkedIn (inline-prompt platforms)."""
     db = SessionLocal()
     name = company_data.get("company_name", "our clinic")
     niche = company_data.get("specialty_niche", "behavioral health")
 
-    # Use str.replace instead of .format() so JSON examples in the prompt strings
-    # (which contain literal { and }) don't get misinterpreted as format placeholders.
     prompt = (
         PLATFORM_PROMPTS.get(
             platform,
@@ -590,16 +555,15 @@ async def _generate_platform_ads_bg(company_id: str, company_data: dict, platfor
     except Exception:
         pass
 
-    # Fallback: create one placeholder item if LLM failed
     if not ads:
-        ads = [{"title": f"{platform.title()} Ad — {name}", "body": f"[{platform.title()} ads pending — connect ANTHROPIC_API_KEY]"}]
+        ads = [{"title": f"{platform.title()} Ad — {name}", "body": f"[{platform.title()} ads pending]"}]
 
     body_field = _PLATFORM_BODY_FIELD.get(platform, "body")
     title_fn = _PLATFORM_AD_TITLE.get(platform, lambda ad, n, i: ad.get("title", f"{platform.title()} Ad #{i} — {n}"))
 
     try:
         for i, ad in enumerate(ads[:5], start=1):
-            body_text = ad.get(body_field) or ad.get("body") or ad.get("answer") or ad.get("voiceover") or str(ad)
+            body_text = ad.get(body_field) or ad.get("body") or ad.get("voiceover") or str(ad)
             ad_title = title_fn(ad, name, i)
             ci = ContentItem(
                 company_id=company_id,
@@ -607,17 +571,245 @@ async def _generate_platform_ads_bg(company_id: str, company_data: dict, platfor
                 status=ContentStatus.pending_review,
                 title=str(ad_title)[:500],
                 body=body_text,
-                # Spread full ad dict so all platform fields are in preview_data.
-                # Always include "body" so the frontend preview works regardless of platform.
                 extra_data={**ad, "platform": platform, "body": body_text},
             )
             db.add(ci)
             db.flush()
             _add_approval(db, company_id, ci, "paid_ads", f"{platform}_ad_copy")
-
         db.commit()
     except Exception as exc:
         log.error("Platform ads DB save failed for %s: %s", platform, exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ── World-class Quora Ads ─────────────────────────────────────────────────────
+
+async def _generate_quora_ads_bg(company_id: str, company_data: dict):
+    """Background task for Quora — uses world-class llm_service.generate_quora_ads()."""
+    db = SessionLocal()
+    name = company_data.get("company_name", "our clinic")
+    try:
+        result = llm_service.generate_quora_ads(company_data)
+        if not isinstance(result, dict):
+            raise ValueError("LLM returned non-dict for Quora ads")
+
+        # 1. Promoted Answers — the highest-value Quora format
+        for i, ans in enumerate(result.get("promoted_answers", [])[:5], start=1):
+            body = ans.get("answer_text", "")
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Quora Promoted Answer #{i} — {ans.get('target_question', name)[:200]}",
+                body=body,
+                extra_data={**ans, "platform": "quora", "format": "promoted_answer", "body": body},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "quora_promoted_answer")
+
+        # 2. Text Ads
+        for i, ad in enumerate(result.get("text_ads", [])[:3], start=1):
+            body = ad.get("body", "")
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Quora Text Ad {ad.get('variant', i)} — {ad.get('headline', name)[:200]}",
+                body=body,
+                extra_data={**ad, "platform": "quora", "format": "text_ad", "body": body},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "quora_text_ad")
+
+        # 3. Targeting strategy summary (single item)
+        targeting = result.get("targeting_strategy", {})
+        if targeting:
+            summary = (
+                f"Question targeting: {len(targeting.get('question_targeting', []))} questions | "
+                f"Topic targeting: {len(targeting.get('topic_targeting', []))} topics | "
+                f"Keyword targeting: {len(targeting.get('keyword_targeting', []))} keywords"
+            )
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Quora Targeting Strategy — {name}",
+                body=summary,
+                extra_data={**targeting, "platform": "quora", "format": "targeting_strategy", "body": summary},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "quora_targeting_strategy")
+
+        db.commit()
+        log.info("Quora ads generated and saved for company %s", company_id)
+    except Exception as exc:
+        log.error("Quora ads generation failed for %s: %s", company_id, exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ── World-class Reddit Ads ────────────────────────────────────────────────────
+
+async def _generate_reddit_ads_bg(company_id: str, company_data: dict):
+    """Background task for Reddit — uses world-class llm_service.generate_reddit_ads()."""
+    db = SessionLocal()
+    name = company_data.get("company_name", "our clinic")
+    try:
+        result = llm_service.generate_reddit_ads(company_data)
+        if not isinstance(result, dict):
+            raise ValueError("LLM returned non-dict for Reddit ads")
+
+        # 1. Promoted Posts — the most effective Reddit format
+        for i, post in enumerate(result.get("promoted_posts", [])[:5], start=1):
+            body = post.get("post_body", "")
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Reddit Promoted Post #{i} ({post.get('target_subreddit', 'r/mentalhealth')}) — {post.get('post_title', name)[:200]}",
+                body=body,
+                extra_data={**post, "platform": "reddit", "format": "promoted_post", "body": body},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "reddit_promoted_post")
+
+        # 2. Conversation Starter Posts
+        for i, post in enumerate(result.get("conversation_starters", [])[:3], start=1):
+            body = post.get("body", "")
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Reddit Conversation Starter #{i} ({post.get('subreddit', 'r/mentalhealth')}) — {post.get('title', name)[:200]}",
+                body=body,
+                extra_data={**post, "platform": "reddit", "format": "conversation_starter", "body": body},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "reddit_conversation_starter")
+
+        # 3. Subreddit strategy summary
+        strategy = result.get("subreddit_strategy", [])
+        if strategy:
+            summary = " | ".join(
+                f"{s.get('subreddit', '')}: {s.get('content_angle', '')}"
+                for s in strategy[:5]
+            )
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Reddit Subreddit Strategy — {name}",
+                body=summary,
+                extra_data={"strategy": strategy, "platform": "reddit", "format": "subreddit_strategy", "body": summary},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "reddit_subreddit_strategy")
+
+        db.commit()
+        log.info("Reddit ads generated and saved for company %s", company_id)
+    except Exception as exc:
+        log.error("Reddit ads generation failed for %s: %s", company_id, exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ── World-class Pinterest Ads ─────────────────────────────────────────────────
+
+async def _generate_pinterest_ads_bg(company_id: str, company_data: dict):
+    """Background task for Pinterest — uses world-class llm_service.generate_pinterest_ads()."""
+    db = SessionLocal()
+    name = company_data.get("company_name", "our clinic")
+    try:
+        result = llm_service.generate_pinterest_ads(company_data)
+        if not isinstance(result, dict):
+            raise ValueError("LLM returned non-dict for Pinterest ads")
+
+        # 1. Standard Pins — the core Pinterest format
+        for i, pin in enumerate(result.get("standard_pins", [])[:5], start=1):
+            body = pin.get("description", "")
+            image = pin.get("image_concept", {})
+            image_summary = (
+                image.get("text_overlay", "") if isinstance(image, dict)
+                else str(image)
+            )
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Pinterest Standard Pin #{i} — {pin.get('title', name)[:200]}",
+                body=body,
+                extra_data={**pin, "platform": "pinterest", "format": "standard_pin", "body": body, "image_summary": image_summary},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "pinterest_standard_pin")
+
+        # 2. Carousel Pins
+        for i, carousel in enumerate(result.get("carousel_pins", [])[:2], start=1):
+            cards = carousel.get("cards", [])
+            body = carousel.get("theme", "") or f"{len(cards)}-card carousel"
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Pinterest Carousel Pin #{i} — {carousel.get('concept_name', name)[:200]}",
+                body=body,
+                extra_data={**carousel, "platform": "pinterest", "format": "carousel_pin", "body": body},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "pinterest_carousel_pin")
+
+        # 3. Video Pins
+        for i, video in enumerate(result.get("video_pins", [])[:2], start=1):
+            body = video.get("full_voiceover_script", "") or video.get("hook_frame", "")
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Pinterest Video Pin #{i} ({video.get('duration', '30s')}) — {name}",
+                body=body,
+                extra_data={**video, "platform": "pinterest", "format": "video_pin", "body": body},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "pinterest_video_pin")
+
+        # 4. Board strategy + SEO summary
+        seo = result.get("pinterest_seo", {})
+        boards = result.get("board_strategy", [])
+        if seo or boards:
+            summary = (
+                f"Profile bio: {seo.get('profile_bio', '')} | "
+                f"{len(boards)} boards recommended | "
+                f"{len(seo.get('top_keywords', []))} SEO keywords"
+            )
+            ci = ContentItem(
+                company_id=company_id,
+                content_type=ContentType.ad_copy_google,
+                status=ContentStatus.pending_review,
+                title=f"Pinterest Board Strategy & SEO — {name}",
+                body=summary,
+                extra_data={"seo": seo, "boards": boards, "platform": "pinterest", "format": "board_strategy", "body": summary},
+            )
+            db.add(ci)
+            db.flush()
+            _add_approval(db, company_id, ci, "paid_ads", "pinterest_board_strategy")
+
+        db.commit()
+        log.info("Pinterest ads generated and saved for company %s", company_id)
+    except Exception as exc:
+        log.error("Pinterest ads generation failed for %s: %s", company_id, exc, exc_info=True)
         db.rollback()
     finally:
         db.close()
