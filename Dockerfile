@@ -39,7 +39,8 @@ COPY --from=frontend-builder /app/.next/static ./.next/static
 RUN printf '#!/bin/sh\nset -e\ncd /backend && python -m alembic upgrade head\ncd /backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 &\ncd /app && exec node server.js\n' > /start.sh \
     && chmod +x /start.sh
 
+# Railway injects $PORT at runtime; Next.js standalone reads it automatically.
+# We do NOT hardcode PORT so Railway can route traffic to the correct port.
 EXPOSE 3000
-ENV PORT=3000
 
 CMD ["/start.sh"]
