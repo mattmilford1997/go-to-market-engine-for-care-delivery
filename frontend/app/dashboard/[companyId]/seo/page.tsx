@@ -24,12 +24,12 @@ interface SEOReport {
     cls?: number;
     inp?: number;
   };
-  crawl_errors?: number;
-  meta_issues?: number;
-  schema_issues?: number;
+  crawl_errors?: number | Array<{ url?: string; issue?: string; severity?: string; [key: string]: unknown }>;
+  meta_issues?: number | Array<{ url?: string; issue?: string; severity?: string; [key: string]: unknown }>;
+  schema_issues?: number | Array<{ [key: string]: unknown }>;
   ranking_keywords?: Array<{ keyword: string; position: number; volume: number; change?: number }>;
-  keyword_opportunities?: Array<{ keyword: string; volume: number; difficulty: number; opportunity_score: number }>;
-  recommendations?: Array<{ issue: string; priority: string; fix: string; category: string; impact?: string }>;
+  keyword_opportunities?: Array<{ keyword: string; volume?: number; difficulty?: number; opportunity_score?: number; intent?: string; recommended_format?: string; [key: string]: unknown }>;
+  recommendations?: Array<{ issue?: string; action?: string; priority: string; fix?: string; category?: string; impact?: string; expected_impact?: string; effort?: string; [key: string]: unknown }>;
   nap_consistency?: number;
   created_at?: string;
 }
@@ -303,7 +303,7 @@ export default function SEOPage() {
           <StatCard icon={<Globe className="w-5 h-5 text-blue-600" />} label="Mobile Score" value={report ? mobile : "—"} sub={report ? scoreLabel(mobile) : "Run audit first"} accent="bg-blue-50" />
           <StatCard icon={<Activity className="w-5 h-5 text-indigo-600" />} label="Desktop Score" value={report ? desktop : "—"} sub={report ? scoreLabel(desktop) : "Run audit first"} accent="bg-indigo-50" />
           <StatCard icon={<TrendingUp className="w-5 h-5 text-emerald-600" />} label="Ranking Keywords" value={rankingKws.length} sub="Tracked positions" accent="bg-emerald-50" />
-          <StatCard icon={<AlertTriangle className="w-5 h-5 text-amber-600" />} label="Open Issues" value={(report?.crawl_errors || 0) + (report?.meta_issues || 0)} sub="Technical fixes needed" accent="bg-amber-50" />
+          <StatCard icon={<AlertTriangle className="w-5 h-5 text-amber-600" />} label="Open Issues" value={(Array.isArray(report?.crawl_errors) ? report.crawl_errors.length : (report?.crawl_errors || 0)) + (Array.isArray(report?.meta_issues) ? report.meta_issues.length : (report?.meta_issues || 0))} sub="Technical fixes needed" accent="bg-amber-50" />
         </div>
 
         {!report ? (
@@ -381,28 +381,33 @@ export default function SEOPage() {
             </div>
 
             {/* Technical Issues */}
-            {(report.crawl_errors! > 0 || report.meta_issues! > 0 || report.schema_issues! > 0) && (
+            {(() => {
+              const crawlCount = Array.isArray(report.crawl_errors) ? report.crawl_errors.length : (report.crawl_errors || 0);
+              const metaCount = Array.isArray(report.meta_issues) ? report.meta_issues.length : (report.meta_issues || 0);
+              const schemaCount = Array.isArray(report.schema_issues) ? report.schema_issues.length : (report.schema_issues || 0);
+              return (crawlCount > 0 || metaCount > 0 || schemaCount > 0) ? (
               <div className="card p-6">
                 <h2 className="text-base font-semibold text-slate-900 mb-4">Technical Issues Found</h2>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="rounded-xl p-4 border border-rose-100 bg-rose-50">
-                    <p className="text-2xl font-bold text-rose-700">{report.crawl_errors}</p>
+                    <p className="text-2xl font-bold text-rose-700">{crawlCount}</p>
                     <p className="text-sm text-rose-700 font-medium mt-1">Crawl Errors</p>
                     <p className="text-xs text-rose-500 mt-0.5">Pages returning 4xx/5xx errors</p>
                   </div>
                   <div className="rounded-xl p-4 border border-amber-100 bg-amber-50">
-                    <p className="text-2xl font-bold text-amber-700">{report.meta_issues}</p>
+                    <p className="text-2xl font-bold text-amber-700">{metaCount}</p>
                     <p className="text-sm text-amber-700 font-medium mt-1">Meta Tag Issues</p>
                     <p className="text-xs text-amber-500 mt-0.5">Missing/duplicate title, description</p>
                   </div>
                   <div className="rounded-xl p-4 border border-blue-100 bg-blue-50">
-                    <p className="text-2xl font-bold text-blue-700">{report.schema_issues || 0}</p>
+                    <p className="text-2xl font-bold text-blue-700">{schemaCount}</p>
                     <p className="text-sm text-blue-700 font-medium mt-1">Schema Errors</p>
                     <p className="text-xs text-blue-500 mt-0.5">Structured data validation issues</p>
                   </div>
                 </div>
               </div>
-            )}
+              ) : null;
+            })()}
 
             {/* Keywords */}
             {rankingKws.length > 0 && (
@@ -484,15 +489,18 @@ export default function SEOPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-slate-900">{rec.issue}</p>
+                          <p className="text-sm font-semibold text-slate-900">{rec.issue || rec.action}</p>
                           <PriorityBadge priority={rec.priority} />
                           {rec.category && (
                             <span className="badge bg-blue-50 text-blue-600">{rec.category}</span>
                           )}
+                          {rec.effort && (
+                            <span className="badge bg-slate-50 text-slate-500">Effort: {rec.effort}</span>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">{rec.fix}</p>
-                        {rec.impact && (
-                          <p className="text-xs text-emerald-600 font-medium mt-1">Impact: {rec.impact}</p>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">{rec.fix || rec.action}</p>
+                        {(rec.impact || rec.expected_impact) && (
+                          <p className="text-xs text-emerald-600 font-medium mt-1">Impact: {rec.impact || rec.expected_impact}</p>
                         )}
                       </div>
                     </div>
