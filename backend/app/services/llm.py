@@ -970,7 +970,7 @@ Return JSON:
     "best_performing_format": "Promoted Answers"
   }}
 }}"""
-        return self._chat_json(prompt, system=system, max_tokens=8192)
+        return self._chat_json(prompt, system=system, max_tokens=16000)
 
     # ══════════════════════════════════════════════════════════════════════════
     # MODULE 1D: REDDIT ADS — WORLD-CLASS GENERATION
@@ -1115,7 +1115,7 @@ Return JSON:
     "upvote_ratio_target": ">70%"
   }}
 }}"""
-        return self._chat_json(prompt, system=system, max_tokens=8192)
+        return self._chat_json(prompt, system=system, max_tokens=16000)
 
     # ══════════════════════════════════════════════════════════════════════════
     # MODULE 1E: PINTEREST ADS — WORLD-CLASS GENERATION
@@ -1288,7 +1288,7 @@ Return JSON:
     "best_performing_format": "Standard Pins with text overlay + Idea Pins for education"
   }}
 }}"""
-        return self._chat_json(prompt, system=system, max_tokens=8192)
+        return self._chat_json(prompt, system=system, max_tokens=16000)
 
     # ══════════════════════════════════════════════════════════════════════════
     # MODULE 4: SEO
