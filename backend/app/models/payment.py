@@ -39,4 +39,5 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
     monthly_amount = Column(Float, default=0.0)
     current_period_end = Column(String(50))  # ISO timestamp from Stripe
     cancel_at_period_end = Column(Boolean, default=False)
-    metadata = Column(JSON, default={})
+    # NOTE: 'metadata' is reserved by SQLAlchemy's Declarative API — use stripe_metadata
+    stripe_metadata = Column(JSON, default={})
