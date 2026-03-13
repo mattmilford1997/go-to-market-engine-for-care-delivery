@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: Optional[str] = None
     GOOGLE_PAGESPEED_API_KEY: Optional[str] = None
 
+    # Stripe
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_PUBLISHABLE_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_PRICE_ID: Optional[str] = None  # Default subscription price
+
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "https://*.vercel.app"]
 

@@ -1,13 +1,25 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { companiesApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export default function Home() {
   const router = useRouter();
+  const { user, hydrate, initialized, logout } = useAuth();
   const [url, setUrl] = useState("novamindmentalhealth.com");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => { hydrate(); }, [hydrate]);
+
+  // If not authenticated, redirect to login
+  useEffect(() => {
+    if (initialized && !user) {
+      router.push("/login");
+    }
+  }, [initialized, user, router]);
 
   async function handleOnboard(e: React.FormEvent) {
     e.preventDefault();
@@ -45,6 +57,10 @@ export default function Home() {
     }
   }
 
+  if (!initialized || !user) {
+    return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-500">Loading...</div>;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex flex-col">
       <header className="px-8 py-6 flex items-center justify-between">
@@ -54,12 +70,31 @@ export default function Home() {
           </div>
           <span className="text-white font-semibold text-lg">Arche Studios</span>
         </div>
-        <button
-          onClick={() => router.push("/admin")}
-          className="text-slate-400 hover:text-white text-sm transition-colors"
-        >
-          Portfolio Admin →
-        </button>
+        <div className="flex items-center gap-4">
+          {user.company_id && (
+            <button
+              onClick={() => router.push(`/dashboard/${user.company_id}`)}
+              className="text-slate-400 hover:text-white text-sm transition-colors"
+            >
+              My Dashboard
+            </button>
+          )}
+          {user.role === "admin" && (
+            <button
+              onClick={() => router.push("/admin")}
+              className="text-slate-400 hover:text-white text-sm transition-colors"
+            >
+              Admin
+            </button>
+          )}
+          <span className="text-slate-500 text-sm">{user.full_name}</span>
+          <button
+            onClick={() => { logout(); router.push("/login"); }}
+            className="text-red-400 hover:text-red-300 text-sm transition-colors"
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 text-center">
@@ -94,7 +129,7 @@ export default function Home() {
               disabled={loading || !url}
               className="px-6 py-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
             >
-              {loading ? "Ingesting…" : "Launch Engine"}
+              {loading ? "Ingesting..." : "Launch Engine"}
             </button>
           </form>
 

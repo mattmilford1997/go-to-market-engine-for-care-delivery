@@ -2,23 +2,39 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { companiesApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { cn, formatCurrency, healthColor } from "@/lib/utils";
 
 export default function AdminPage() {
   const router = useRouter();
+  const { user, hydrate, initialized, logout } = useAuth();
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => { hydrate(); }, [hydrate]);
+
   useEffect(() => {
-    companiesApi.portfolioOverview()
-      .then((r) => setCompanies(r.data))
-      .catch(() => companiesApi.list().then((r) => setCompanies(r.data)))
-      .finally(() => setLoading(false));
-  }, []);
+    if (initialized && !user) {
+      router.push("/login");
+    }
+  }, [initialized, user, router]);
+
+  useEffect(() => {
+    if (user) {
+      companiesApi.portfolioOverview()
+        .then((r) => setCompanies(r.data))
+        .catch(() => companiesApi.list().then((r) => setCompanies(r.data)))
+        .finally(() => setLoading(false));
+    }
+  }, [user]);
 
   const totalBudget = companies.reduce((s, c) => s + (c.monthly_budget || 0), 0);
   const activeCampaigns = companies.reduce((s, c) => s + (c.active_campaigns || 0), 0);
   const pendingApprovals = companies.reduce((s, c) => s + (c.pending_approvals || 0), 0);
+
+  if (!initialized || !user) {
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -33,12 +49,30 @@ export default function AdminPage() {
             <p className="text-xs text-gray-400">Portfolio Overview</p>
           </div>
         </div>
-        <button
-          onClick={() => router.push("/")}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-        >
-          + Add Company
-        </button>
+        <div className="flex items-center gap-3">
+          {user.role === "admin" && (
+            <button
+              onClick={() => router.push("/admin/users")}
+              className="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors"
+            >
+              Users
+            </button>
+          )}
+          <button
+            onClick={() => router.push("/")}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+          >
+            + Add Company
+          </button>
+          <span className="text-xs text-gray-300">|</span>
+          <span className="text-sm text-gray-500">{user.full_name}</span>
+          <button
+            onClick={() => { logout(); router.push("/login"); }}
+            className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
       <main className="px-8 py-6 max-w-7xl">
@@ -68,10 +102,9 @@ export default function AdminPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-gray-400">Loading…</div>
+            <div className="text-center py-12 text-gray-400">Loading...</div>
           ) : companies.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-xl mb-2">🏥</p>
               <p className="font-medium text-gray-700">No companies yet</p>
               <p className="text-gray-500 text-sm mt-1 mb-4">
                 Add your first portfolio company to get started.
@@ -110,9 +143,7 @@ export default function AdminPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-xs capitalize text-gray-500">
-                        {company.status}
-                      </span>
+                      <span className="text-xs capitalize text-gray-500">{company.status}</span>
                     </td>
                     <td className="px-6 py-4 text-right text-gray-700">
                       {formatCurrency(company.monthly_budget || 0)}
@@ -130,10 +161,7 @@ export default function AdminPage() {
                     <td className="px-6 py-4">
                       <div className="flex justify-center">
                         <span
-                          className={cn(
-                            "w-3 h-3 rounded-full",
-                            healthColor(company.health || "green")
-                          )}
+                          className={cn("w-3 h-3 rounded-full", healthColor(company.health || "green"))}
                           title={company.health}
                         />
                       </div>
@@ -143,7 +171,7 @@ export default function AdminPage() {
                         onClick={() => router.push(`/dashboard/${company.id}`)}
                         className="text-blue-600 text-xs hover:underline"
                       >
-                        Open Dashboard →
+                        Open Dashboard
                       </button>
                     </td>
                   </tr>

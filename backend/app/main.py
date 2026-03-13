@@ -10,11 +10,61 @@ import app.models  # noqa — ensure all models are registered before create_all
 async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
+        _seed_defaults()
     except Exception as exc:
-        # Log but don't crash — DB may not be ready yet; individual requests will fail with 500
         import logging
-        logging.getLogger(__name__).error("DB create_all failed on startup: %s", exc)
+        logging.getLogger(__name__).error("DB startup failed: %s", exc)
     yield
+
+
+def _seed_defaults():
+    """Create default admin + Novamind company if they don't exist yet."""
+    from app.db.database import SessionLocal
+    from app.models.user import User, UserRole
+    from app.models.company import Company, CompanyStatus
+    from app.core.auth import hash_password
+    db = SessionLocal()
+    try:
+        if db.query(User).filter(User.email == "admin@archestudios.com").first():
+            return  # Already seeded
+
+        company = db.query(Company).filter(Company.website_url == "https://novamindmentalhealth.com").first()
+        if not company:
+            company = Company(
+                name="NovaMind Mental Health",
+                website_url="https://novamindmentalhealth.com",
+                slug="novamind",
+                status=CompanyStatus.active,
+                is_pilot=True,
+                specialty_niche="Mental Health & Psychiatry",
+                services=[
+                    {"name": "Psychiatric Evaluation", "description": "Comprehensive psychiatric assessment"},
+                    {"name": "Medication Management", "description": "Ongoing medication monitoring"},
+                    {"name": "Psychotherapy", "description": "Individual therapy (CBT, DBT, EMDR)"},
+                    {"name": "TMS Therapy", "description": "Transcranial Magnetic Stimulation"},
+                    {"name": "Ketamine Therapy", "description": "IV ketamine infusions for depression"},
+                ],
+                locations=[{"name": "NovaMind HQ", "city": "Austin", "state": "TX", "zip": "78701"}],
+                target_demographics=["Adults 25-65", "Treatment-resistant depression", "Anxiety disorders"],
+                differentiators=["Advanced neuromodulation", "Ketamine therapy", "Integrative psychiatry"],
+                insurance_accepted=["Aetna", "BCBS", "Cigna", "UnitedHealthcare", "Medicare"],
+                brand_guidelines={"colors": {"primary": "#6366f1", "secondary": "#818cf8"}, "tone": "Professional, empathetic"},
+            )
+            db.add(company)
+            db.commit()
+            db.refresh(company)
+
+        db.add(User(email="admin@archestudios.com", hashed_password=hash_password("arche2024!"),
+                     full_name="Arche Admin", role=UserRole.admin, is_active=True, company_id=str(company.id)))
+        db.add(User(email="demo@novamindmentalhealth.com", hashed_password=hash_password("novamind2024!"),
+                     full_name="NovaMind Demo User", role=UserRole.user, is_active=True, company_id=str(company.id)))
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 from app.api.companies import router as companies_router
 from app.api.approval import router as approval_router
 from app.api.modules.referral import router as referral_router
@@ -36,6 +86,9 @@ from app.api.modules.demo import router as demo_router
 from app.api.modules.spam import router as spam_router
 from app.api.modules.llm_settings import router as llm_settings_router
 from app.api.modules.costs import router as costs_router
+from app.api.modules.billing import router as billing_router
+from app.api.auth import router as auth_router
+from app.api.seed import router as seed_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -49,7 +102,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -76,6 +129,9 @@ app.include_router(demo_router, prefix=PREFIX)
 app.include_router(spam_router, prefix=PREFIX)
 app.include_router(llm_settings_router, prefix=PREFIX)
 app.include_router(costs_router, prefix=PREFIX)
+app.include_router(billing_router, prefix=PREFIX)
+app.include_router(auth_router, prefix=PREFIX)
+app.include_router(seed_router, prefix=PREFIX)
 
 
 @app.get("/health")

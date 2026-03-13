@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { companiesApi, approvalApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import type { AxiosError } from "axios";
 
@@ -17,6 +18,7 @@ const NAV = [
   { href: "/library", label: "Materials", icon: "📁" },
   { href: "/schedule", label: "Calendar", icon: "📅" },
   { href: "/setup", label: "Setup Guide", icon: "🔑" },
+  { href: "/billing", label: "Billing & Payments", icon: "💳" },
   { href: "/settings", label: "Settings & Credentials", icon: "⚙" },
 ];
 
@@ -46,6 +48,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user: authUser, hydrate, initialized, logout } = useAuth();
+
+  useEffect(() => { hydrate(); }, [hydrate]);
+
+  useEffect(() => {
+    if (initialized && !authUser) {
+      router.push("/login");
+    }
+  }, [initialized, authUser, router]);
 
   const { data: company, error: companyError } = useQuery({
     queryKey: ["company", companyId],
@@ -191,8 +202,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         })}
       </div>
 
-      {/* Portfolio link */}
-      <div className="px-3 pb-4">
+      {/* User & Portfolio */}
+      <div className="px-3 pb-4 space-y-2" style={{ borderTop: "1px solid #1e293b" }}>
+        {authUser && (
+          <div className="px-3 py-2">
+            <p className="text-xs text-slate-400 truncate">{authUser.full_name}</p>
+            <p className="text-xs truncate" style={{ color: "#475569" }}>{authUser.email}</p>
+          </div>
+        )}
         <button
           onClick={() => { router.push("/admin"); setMobileOpen(false); }}
           className="w-full text-xs py-2 rounded-lg transition-colors text-center"
@@ -200,7 +217,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           onMouseEnter={(e) => { (e.target as HTMLElement).style.color = "#94a3b8"; }}
           onMouseLeave={(e) => { (e.target as HTMLElement).style.color = "#475569"; }}
         >
-          ← Portfolio Overview
+          Portfolio Overview
+        </button>
+        <button
+          onClick={() => { logout(); router.push("/login"); setMobileOpen(false); }}
+          className="w-full text-xs py-2 rounded-lg transition-colors text-center"
+          style={{ color: "#ef4444", border: "1px solid #1e293b" }}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "rgba(239,68,68,0.1)"; }}
+          onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
+        >
+          Sign Out
         </button>
       </div>
     </>
