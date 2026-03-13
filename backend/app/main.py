@@ -36,6 +36,7 @@ from app.api.modules.demo import router as demo_router
 from app.api.modules.spam import router as spam_router
 from app.api.modules.llm_settings import router as llm_settings_router
 from app.api.modules.costs import router as costs_router
+from app.api.modules.billing import router as billing_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -76,6 +77,7 @@ app.include_router(demo_router, prefix=PREFIX)
 app.include_router(spam_router, prefix=PREFIX)
 app.include_router(llm_settings_router, prefix=PREFIX)
 app.include_router(costs_router, prefix=PREFIX)
+app.include_router(billing_router, prefix=PREFIX)
 
 
 @app.get("/health")

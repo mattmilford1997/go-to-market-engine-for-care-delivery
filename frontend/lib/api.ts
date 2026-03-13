@@ -287,6 +287,26 @@ export const costsApi = {
   rates: () => api.get("/costs/cost-rates"),
 };
 
+// Billing & Payments
+export const billingApi = {
+  config: () => api.get("/billing/config"),
+  status: (companyId: string) => api.get(`/billing/${companyId}/status`),
+  createSetupIntent: (companyId: string) =>
+    api.post(`/billing/${companyId}/setup-intent`),
+  confirmSetup: (companyId: string) =>
+    api.post(`/billing/${companyId}/confirm-setup`),
+  paymentMethods: (companyId: string) =>
+    api.get(`/billing/${companyId}/payment-methods`),
+  removePaymentMethod: (companyId: string, methodId: string) =>
+    api.delete(`/billing/${companyId}/payment-methods/${methodId}`),
+  subscribe: (companyId: string, priceId?: string) =>
+    api.post(`/billing/${companyId}/subscribe`, { price_id: priceId }),
+  cancelSubscription: (companyId: string) =>
+    api.post(`/billing/${companyId}/cancel-subscription`),
+  reactivateSubscription: (companyId: string) =>
+    api.post(`/billing/${companyId}/reactivate-subscription`),
+};
+
 // Demo data seeding
 export const demoApi = {
   loadAll: (companyId: string) => api.post(`/demo/${companyId}/load-all`),

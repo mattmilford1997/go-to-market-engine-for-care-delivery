@@ -17,6 +17,7 @@ const NAV = [
   { href: "/library", label: "Materials", icon: "📁" },
   { href: "/schedule", label: "Calendar", icon: "📅" },
   { href: "/setup", label: "Setup Guide", icon: "🔑" },
+  { href: "/billing", label: "Billing & Payments", icon: "💳" },
   { href: "/settings", label: "Settings & Credentials", icon: "⚙" },
 ];
 
