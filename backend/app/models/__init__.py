@@ -3,6 +3,7 @@ from app.models.referral import ReferralLead, Touchpoint, Campaign, CampaignEnro
 from app.models.content import ContentItem, ApprovalItem, ContentType, ContentStatus
 from app.models.seo import SEOReport, DirectoryProfile
 from app.models.payment import PaymentMethod, Subscription, SubscriptionStatus
+from app.models.user import User, UserRole
 
 __all__ = [
     "Company", "CompanyStatus",
@@ -10,4 +11,5 @@ __all__ = [
     "ContentItem", "ApprovalItem", "ContentType", "ContentStatus",
     "SEOReport", "DirectoryProfile",
     "PaymentMethod", "Subscription", "SubscriptionStatus",
+    "User", "UserRole",
 ]

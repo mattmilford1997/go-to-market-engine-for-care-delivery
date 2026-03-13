@@ -22,6 +22,40 @@ api.interceptors.response.use(
   }
 );
 
+// Auth
+export const authApi = {
+  register: (data: { email: string; password: string; full_name: string; company_id?: string }) =>
+    api.post("/auth/register", data),
+  login: (data: { email: string; password: string }) =>
+    api.post("/auth/login", data),
+  me: () => api.get("/auth/me"),
+  forgotPassword: (email: string) =>
+    api.post("/auth/forgot-password", { email }),
+  resetPassword: (token: string, new_password: string) =>
+    api.post("/auth/reset-password", { token, new_password }),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post("/auth/change-password", { current_password, new_password }),
+  adminUsers: () => api.get("/auth/admin/users"),
+  adminUpdateUser: (userId: string, data: Record<string, unknown>) =>
+    api.patch(`/auth/admin/users/${userId}`, data),
+};
+
+// Seed
+export const seedApi = {
+  defaultUser: () => api.post("/seed/default-user"),
+};
+
+// Auth interceptor: attach token to all requests
+api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("arche_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
 // LLM Provider Settings
 export const llmSettingsApi = {
   providers: () => api.get("/llm-settings/providers"),
